@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "marketplace": {
+      "type": "http",
+      "url": "${EONIX_MCP_URL:-https://mcp.marketplace.eonix.be}/mcp"
+    }
+  }
+}

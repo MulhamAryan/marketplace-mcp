@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "eonix",
+  "description": "Eonix internal Claude Code marketplace: MCP memory/knowledge connector + hooks.",
+  "owner": {
+    "name": "Eonix",
+    "url": "https://github.com/MulhamAryan/marketplace-mcp"
+  },
+  "plugins": [
+    {
+      "name": "eonix-mcp",
+      "description": "Eonix MCP memory + official knowledge for Claude Code (OAuth/ADFS connector + auto-injection hooks).",
+      "source": "./plugins/eonix",
+      "category": "productivity"
+    }
+  ]
+}
