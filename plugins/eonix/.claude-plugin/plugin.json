@@ -15,7 +15,8 @@
             "timeout": 6,
             "headers": {
               "Authorization": "Bearer ${EONIX_HOOK_TOKEN}"
-            }
+            },
+            "allowedEnvVars": ["EONIX_HOOK_TOKEN"]
           }
         ]
       }
@@ -29,7 +30,8 @@
             "timeout": 6,
             "headers": {
               "Authorization": "Bearer ${EONIX_HOOK_TOKEN}"
-            }
+            },
+            "allowedEnvVars": ["EONIX_HOOK_TOKEN"]
           },
           {
             "type": "http",
@@ -37,7 +39,8 @@
             "timeout": 6,
             "headers": {
               "Authorization": "Bearer ${EONIX_HOOK_TOKEN}"
-            }
+            },
+            "allowedEnvVars": ["EONIX_HOOK_TOKEN"]
           },
           {
             "type": "http",
@@ -45,7 +48,8 @@
             "timeout": 6,
             "headers": {
               "Authorization": "Bearer ${EONIX_HOOK_TOKEN}"
-            }
+            },
+            "allowedEnvVars": ["EONIX_HOOK_TOKEN"]
           }
         ]
       }
@@ -60,7 +64,8 @@
             "timeout": 6,
             "headers": {
               "Authorization": "Bearer ${EONIX_HOOK_TOKEN}"
-            }
+            },
+            "allowedEnvVars": ["EONIX_HOOK_TOKEN"]
           }
         ]
       }
@@ -74,7 +79,8 @@
             "timeout": 6,
             "headers": {
               "Authorization": "Bearer ${EONIX_HOOK_TOKEN}"
-            }
+            },
+            "allowedEnvVars": ["EONIX_HOOK_TOKEN"]
           }
         ]
       }
