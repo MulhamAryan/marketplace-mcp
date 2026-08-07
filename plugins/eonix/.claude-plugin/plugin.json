@@ -1,7 +1,7 @@
 {
   "name": "eonix-mcp",
   "description": "Eonix MCP memory + official knowledge for Claude Code. Registers the marketplace MCP as an OAuth/ADFS connector and wires the auto-injection hooks (notes, official knowledge, episodic capture).",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Eonix"
   },
@@ -10,13 +10,13 @@
       {
         "hooks": [
           {
-            "type": "http",
-            "url": "https://mcp.marketplace.eonix.be/api/hook/session-start",
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_session_start",
             "timeout": 6,
-            "headers": {
-              "Authorization": "Bearer ${EONIX_HOOK_TOKEN}"
-            },
-            "allowedEnvVars": ["EONIX_HOOK_TOKEN"]
+            "input": {
+              "cwd": "${cwd}"
+            }
           }
         ]
       }
@@ -25,31 +25,35 @@
       {
         "hooks": [
           {
-            "type": "http",
-            "url": "https://mcp.marketplace.eonix.be/api/hook/knowledge-check",
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_knowledge_check",
             "timeout": 6,
-            "headers": {
-              "Authorization": "Bearer ${EONIX_HOOK_TOKEN}"
-            },
-            "allowedEnvVars": ["EONIX_HOOK_TOKEN"]
+            "input": {
+              "prompt": "${prompt}"
+            }
           },
           {
-            "type": "http",
-            "url": "https://mcp.marketplace.eonix.be/api/hook/notes-check",
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_notes_check",
             "timeout": 6,
-            "headers": {
-              "Authorization": "Bearer ${EONIX_HOOK_TOKEN}"
-            },
-            "allowedEnvVars": ["EONIX_HOOK_TOKEN"]
+            "input": {
+              "prompt": "${prompt}",
+              "cwd": "${cwd}"
+            }
           },
           {
-            "type": "http",
-            "url": "https://mcp.marketplace.eonix.be/api/hook/capture",
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_capture",
             "timeout": 6,
-            "headers": {
-              "Authorization": "Bearer ${EONIX_HOOK_TOKEN}"
-            },
-            "allowedEnvVars": ["EONIX_HOOK_TOKEN"]
+            "input": {
+              "hookEventName": "UserPromptSubmit",
+              "sessionId": "${session_id}",
+              "cwd": "${cwd}",
+              "prompt": "${prompt}"
+            }
           }
         ]
       }
@@ -59,13 +63,19 @@
         "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell",
         "hooks": [
           {
-            "type": "http",
-            "url": "https://mcp.marketplace.eonix.be/api/hook/capture",
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_capture",
             "timeout": 6,
-            "headers": {
-              "Authorization": "Bearer ${EONIX_HOOK_TOKEN}"
-            },
-            "allowedEnvVars": ["EONIX_HOOK_TOKEN"]
+            "input": {
+              "hookEventName": "PostToolUse",
+              "sessionId": "${session_id}",
+              "cwd": "${cwd}",
+              "toolName": "${tool_name}",
+              "toolInputFilePath": "${tool_input.file_path}",
+              "toolInputCommand": "${tool_input.command}",
+              "toolResponseSuccess": "${tool_output.success}"
+            }
           }
         ]
       }
@@ -74,13 +84,15 @@
       {
         "hooks": [
           {
-            "type": "http",
-            "url": "https://mcp.marketplace.eonix.be/api/hook/capture",
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_capture",
             "timeout": 6,
-            "headers": {
-              "Authorization": "Bearer ${EONIX_HOOK_TOKEN}"
-            },
-            "allowedEnvVars": ["EONIX_HOOK_TOKEN"]
+            "input": {
+              "hookEventName": "Stop",
+              "sessionId": "${session_id}",
+              "cwd": "${cwd}"
+            }
           }
         ]
       }
