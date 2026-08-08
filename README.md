@@ -32,7 +32,7 @@ setx EONIX_MCP_URL "https://mcp.marketplace.eonix.be"
 ```
 .claude-plugin/marketplace.json   marketplace manifest (name: eonix)
 .claude-plugin/plugin.json        hooks (UserPromptSubmit / PostToolUse / Stop)
-.mcp.json                         the `marketplace` MCP server (HTTP + OAuth)
+.mcp.json                         the `marketplace` MCP server (HTTP + OAuth, alwaysLoad: true)
 ```
 
 Single-plugin marketplace, so the plugin's own files live at the repo root instead of under a
@@ -66,3 +66,18 @@ every attempt fails with "mcp_tool hooks are not available for the 'SessionStart
   delivery path for it. Until a real fix exists (e.g. serving it via `hook_knowledge_check`/
   `hook_notes_check` on the first `UserPromptSubmit`, or a Claude Code `SessionStart` mode that supports
   `mcp_tool`), keep a local copy of the ruleset in your own `~/.claude/CLAUDE.md`.
+
+## Connection race on the first prompt(s) of a session
+
+Even on `UserPromptSubmit`, the very first prompts of a brand-new session can hit
+`MCP server 'plugin:eonix-mcp:marketplace' not connected` if the OAuth-authenticated MCP session
+hasn't finished connecting yet. There's no hook-level delay/retry for this (hooks in the same event
+run in parallel, so a `sleep` hook wouldn't help — verified against Claude Code's own docs).
+
+Mitigated (not fully eliminated) as of v0.5.0 by setting `"alwaysLoad": true` on the `marketplace`
+server in `.mcp.json` — this makes Claude Code's startup **wait** for that server to connect (up to
+the standard 5-second connect timeout) before building the first prompt, instead of connecting in the
+background while you're already typing. For an already-authenticated dev (silent OAuth refresh) this
+should cover most cases. If 5s isn't enough on a slow link, raise it per-developer with
+`CLAUDE_CODE_MCP_CONNECT_TIMEOUT_MS` (env var, see Claude Code's `env-vars` docs) — not something this
+plugin can set on a dev's behalf.
