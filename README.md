@@ -24,7 +24,7 @@ Restart Claude Code. First use of a `marketplace` tool opens the browser for the
 ```
 .claude-plugin/marketplace.json   marketplace manifest (name: eonix)
 plugins/eonix/
-  .claude-plugin/plugin.json      hooks (SessionStart / UserPromptSubmit / PostToolUse / Stop)
+  .claude-plugin/plugin.json      hooks (UserPromptSubmit / PostToolUse / Stop)
   .mcp.json                       the `marketplace` MCP server (HTTP + OAuth)
   README.md                       plugin doc
 ```

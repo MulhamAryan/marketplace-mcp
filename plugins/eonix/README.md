@@ -26,7 +26,7 @@ setx EONIX_MCP_URL "https://mcp.marketplace.eonix.be"
 
 | File | Role |
 |------|------|
-| `.claude-plugin/plugin.json` | Hooks (SessionStart / UserPromptSubmit / PostToolUse / Stop) |
+| `.claude-plugin/plugin.json` | Hooks (UserPromptSubmit / PostToolUse / Stop) |
 | `.mcp.json` | The `marketplace` MCP server (HTTP, OAuth — no static secret) |
 
 The marketplace manifest (`.claude-plugin/marketplace.json`) lives at the repo root.
@@ -35,13 +35,25 @@ The marketplace manifest (`.claude-plugin/marketplace.json`) lives at the repo r
 
 - **MCP tools AND hooks** → the same OAuth 2.1 `authorization_code` + PKCE + refresh session (federated
   to ADFS). No token to copy, nothing to set with `setx`.
-- Hooks are wired as `mcp_tool` hooks (`hook_knowledge_check`, `hook_notes_check`, `hook_session_start`,
-  `hook_capture` on the `marketplace` server) instead of raw HTTP calls with a static bearer token — they
-  ride on whichever MCP session is already connected, so there's no separate credential to provision,
-  rotate, or corrupt (the old static PAT model hit a real bug: `setx` silently truncates values over
-  1024 characters, and the PAT is a ~1400-char JWT).
+- Hooks are wired as `mcp_tool` hooks (`hook_knowledge_check`, `hook_notes_check`,
+  `hook_consolidation_check`, `hook_capture` on the `marketplace` server) instead of raw HTTP calls with
+  a static bearer token — they ride on whichever MCP session is already connected, so there's no separate
+  credential to provision, rotate, or corrupt (the old static PAT model hit a real bug: `setx` silently
+  truncates values over 1024 characters, and the PAT is a ~1400-char JWT).
 - The legacy `/api/hook/*` HTTP endpoints (static `EONIX_HOOK_TOKEN` PAT) still exist server-side during
   the transition, but this plugin no longer calls them.
 
-The CLAUDE.md operating rules are delivered server-side via the `SessionStart` hook — no local CLAUDE.md
-to copy, and the rules stay centrally updatable.
+## Known limitation: no SessionStart hook
+
+Claude Code cannot run `mcp_tool` hooks on `SessionStart` (no MCP client context exists that early —
+every attempt fails with "mcp_tool hooks are not available for the 'SessionStart' hook event"). So:
+
+- `hook_session_start` exists server-side but is **not wired to anything** — it would only ever error.
+- The consolidation nudge it computes is instead served by `hook_consolidation_check`, wired on
+  `UserPromptSubmit` (an event that does run `mcp_tool` hooks), once the MCP session connects.
+- The full "MANDATORY STARTUP REMINDER" ruleset (auto-distillation, episodic memory, knowledge base
+  instructions) is **not** delivered automatically at all right now — despite what earlier docs here
+  claimed, there is no working server-side delivery path for it. Until a real fix exists (e.g. serving
+  it via `hook_knowledge_check`/`hook_notes_check` on the first `UserPromptSubmit`, or a Claude Code
+  `SessionStart` mode that supports `mcp_tool`), keep a local copy of the ruleset in your own
+  `~/.claude/CLAUDE.md`.
