@@ -10,7 +10,7 @@
     {
       "name": "eonix-mcp",
       "description": "Eonix MCP memory + official knowledge for Claude Code (OAuth/ADFS connector + auto-injection hooks).",
-      "source": "./plugins/eonix",
+      "source": ".",
       "category": "productivity"
     }
   ]
