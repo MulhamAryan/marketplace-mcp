@@ -21,10 +21,31 @@ That's it — no env var, no PAT to copy, no `setx`. On first use (a hook firing
 tool call), the browser opens for the ADFS login; Claude Code stores the resulting token itself and
 renews it silently from then on.
 
-Override the MCP base URL only if you're pointing at a non-prod instance (local/VPN):
+## Prod mode vs dev mode
 
-```bash
-setx EONIX_MCP_URL "https://mcp.marketplace.eonix.be"
+The `marketplace` MCP server URL in `.mcp.json` is `${EONIX_MCP_URL:-https://mcp.marketplace.eonix.be}/mcp`:
+no `EONIX_MCP_URL` set means **prod mode** (default, nothing to configure). Setting it points the
+plugin at a different instance — typically the **dev mode** local Docker stack.
+
+Local Docker stack URLs (dev mode):
+
+| Service                  | URL                                                |
+|---------------------------|-----------------------------------------------------|
+| Web (marketplace, Studio) | `https://marketplace.local.eonix.be:59100`          |
+| Studio                    | `https://marketplace.local.eonix.be:59100/Studio`   |
+| MCP (tool server)         | `https://mcp.marketplace.local.eonix.be:59101/mcp`  |
+
+Switch to dev mode — set `EONIX_MCP_URL` to the MCP base URL **without** the `/mcp` suffix (it's
+appended automatically by `.mcp.json`), then restart Claude Code so it picks up the new env var:
+
+```powershell
+setx EONIX_MCP_URL "https://mcp.marketplace.local.eonix.be:59101"
+```
+
+Switch back to prod mode — remove the override and restart Claude Code:
+
+```powershell
+[Environment]::SetEnvironmentVariable("EONIX_MCP_URL", $null, "User")
 ```
 
 ## Layout
