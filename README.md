@@ -80,13 +80,14 @@ Claude Code cannot run `mcp_tool` hooks on `SessionStart` (no MCP client context
 every attempt fails with "mcp_tool hooks are not available for the 'SessionStart' hook event"). So:
 
 - `hook_session_start` exists server-side but is **not wired to anything** — it would only ever error.
-- The consolidation nudge it computes is instead served by `hook_consolidation_check`, wired on
-  `UserPromptSubmit` (an event that does run `mcp_tool` hooks), once the MCP session connects.
-- The full "MANDATORY STARTUP REMINDER" ruleset (auto-distillation, episodic memory, knowledge base
-  instructions) is **not** delivered automatically at all right now — there is no working server-side
-  delivery path for it. Until a real fix exists (e.g. serving it via `hook_knowledge_check`/
-  `hook_notes_check` on the first `UserPromptSubmit`, or a Claude Code `SessionStart` mode that supports
-  `mcp_tool`), keep a local copy of the ruleset in your own `~/.claude/CLAUDE.md`.
+- Its full payload — the configurable "Hooks.SessionStartContext" ruleset (auto-distillation, episodic
+  memory, knowledge base instructions) plus the consolidation nudge — is instead served by
+  `hook_consolidation_check`, wired on `UserPromptSubmit` (an event that does run `mcp_tool` hooks), once
+  the MCP session connects. Fixed server-side in `skill-marketplace`: delivered on every prompt rather
+  than only once at session start, since there is no reliable "first prompt of a session" signal
+  available to the hook.
+- A local copy of the ruleset in your own `~/.claude/CLAUDE.md` is no longer required for it to reach the
+  model, but can still be kept as a redundant safety net.
 
 ## Connection race on the first prompt(s) of a session
 
