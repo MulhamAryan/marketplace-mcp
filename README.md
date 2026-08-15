@@ -67,7 +67,8 @@ The backend (Marketplace.Web + Marketplace.Mcp + Postgres) lives in the separate
 - **MCP tools AND hooks** → the same OAuth 2.1 `authorization_code` + PKCE + refresh session (federated
   to ADFS). No token to copy, nothing to set with `setx`.
 - Hooks are wired as `mcp_tool` hooks (`hook_knowledge_check`, `hook_notes_check`,
-  `hook_consolidation_check`, `hook_capture` on the `marketplace` server) instead of raw HTTP calls with
+  `hook_consolidation_check`, `hook_capture`, `hook_distill_reminder` on the `marketplace` server)
+  instead of raw HTTP calls with
   a static bearer token — they ride on whichever MCP session is already connected, so there's no separate
   credential to provision, rotate, or corrupt (the old static PAT model hit a real bug: `setx` silently
   truncates values over 1024 characters, and the PAT is a ~1400-char JWT).
@@ -88,6 +89,16 @@ every attempt fails with "mcp_tool hooks are not available for the 'SessionStart
   available to the hook.
 - A local copy of the ruleset in your own `~/.claude/CLAUDE.md` is no longer required for it to reach the
   model, but can still be kept as a redundant safety net.
+
+## Forcing the auto-distillation decision every turn
+
+`hook_consolidation_check`'s reminder is only a nudge in the model's context — nothing stops the model
+from silently skipping the decision. `hook_distill_reminder`, wired on `Stop` (fires at the end of
+*every* turn, not just session end), returns a `systemMessage` the model must respond to before the
+turn actually ends. This isn't a hard block: Claude Code's current hook contract only offers real
+exit-code-2 blocking to `command`-type hooks, and doesn't expose a `stop_hook_active`-style loop guard
+for `mcp_tool` hooks on `Stop` — `systemMessage` is the closest lever available without reintroducing
+the infinite-reloop risk a blocking `agent`/`prompt`-type `Stop` hook hit in this project before.
 
 ## Connection race on the first prompt(s) of a session
 

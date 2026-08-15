@@ -1,7 +1,7 @@
 {
   "name": "eonix-mcp",
   "description": "Eonix MCP memory + official knowledge for Claude Code. Registers the marketplace MCP as an OAuth/ADFS connector and wires the auto-injection hooks (notes, official knowledge, episodic capture).",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "author": {
     "name": "Eonix"
   },
@@ -86,6 +86,13 @@
               "sessionId": "${session_id}",
               "cwd": "${cwd}"
             }
+          },
+          {
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_distill_reminder",
+            "timeout": 6,
+            "input": {}
           }
         ]
       }
