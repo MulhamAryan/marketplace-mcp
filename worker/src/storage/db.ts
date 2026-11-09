@@ -102,6 +102,12 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX ix_summaries_project ON summaries(project, created_at);
   `,
+  // 2: compression bookkeeping on summaries (a turn's Stop row carries its retry count).
+  `
+  ALTER TABLE summaries ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
+  CREATE INDEX ix_summaries_status ON summaries(status, id);
+  CREATE INDEX ix_raw_events_turn ON raw_events(session_id, prompt_number, status);
+  `,
 ];
 
 export type Db = DatabaseSync;

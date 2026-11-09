@@ -6,6 +6,8 @@ import { openDb } from '../storage/db.js';
 import { loadSettings, paths } from '../settings.js';
 import { spoolDrain } from '../cli/spool.js';
 import { log } from '../log.js';
+import { CompressionQueue } from '../compression/queue.js';
+import { AgentSdkProvider, resolveClaudePath } from '../compression/provider.js';
 
 /**
  * Runs the worker in the foreground. One worker per machine: the loopback port is the lock —
@@ -17,6 +19,7 @@ export function runWorker(): Promise<void> {
   const startedAt = Date.now();
   let server: Server;
   let drainTimer: NodeJS.Timeout | undefined;
+  let compression: CompressionQueue | undefined;
 
   const drain = () => {
     const n = spoolDrain(
@@ -28,6 +31,7 @@ export function runWorker(): Promise<void> {
 
   const shutdown = () => {
     if (drainTimer) clearInterval(drainTimer);
+    compression?.stop();
     server.close(() => {
       db.close();
       try {
@@ -47,6 +51,14 @@ export function runWorker(): Promise<void> {
       log('worker', `listening on 127.0.0.1:${settings.port} (pid ${process.pid})`);
       drain();
       drainTimer = setInterval(drain, settings.spoolDrainIntervalMs);
+      const claudePath = resolveClaudePath(settings);
+      if (claudePath) {
+        compression = new CompressionQueue(db, settings, new AgentSdkProvider(settings, claudePath));
+        compression.start();
+        log('worker', `compression on (${settings.compressionModel} via ${claudePath})`);
+      } else {
+        log('worker', 'compression off: no `claude` executable found (set claudePath in settings.json)');
+      }
       resolve();
     });
     server.on('error', (err: NodeJS.ErrnoException) => {

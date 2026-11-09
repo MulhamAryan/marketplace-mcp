@@ -7,10 +7,10 @@ import path from 'node:path';
 
 /**
  * End-to-end through the built bundle, exactly as Claude Code runs it:
- * `node dist/eonix-mem.cjs hook <event>` with the hook payload on stdin.
+ * `node dist/eonix-mem.mjs hook <event>` with the hook payload on stdin.
  * Requires `npm run build` first.
  */
-const CLI = path.resolve(import.meta.dirname, '..', 'dist', 'eonix-mem.cjs');
+const CLI = path.resolve(import.meta.dirname, '..', 'dist', 'eonix-mem.mjs');
 const PORT = 37000 + Math.floor(Math.random() * 500);
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eonix-mem-test-'));
 const env = { ...process.env, EONIX_MEM_DATA_DIR: dataDir, EONIX_MEM_PORT: String(PORT) };
@@ -31,7 +31,11 @@ async function health() {
   return (await res.json()) as { name: string; counts: Record<string, number> };
 }
 
-before(() => assert.ok(fs.existsSync(CLI), 'run `npm run build` before the tests'));
+before(() => {
+  assert.ok(fs.existsSync(CLI), 'run `npm run build` before the tests');
+  // Capture only: point compression at a missing executable so no real model call is made.
+  fs.writeFileSync(path.join(dataDir, 'settings.json'), JSON.stringify({ claudePath: path.join(dataDir, 'no-claude.exe') }));
+});
 
 after(async () => {
   await fetch(`http://127.0.0.1:${PORT}/api/shutdown`, { method: 'POST' }).catch(() => {});

@@ -1,4 +1,4 @@
-import { loadSettings } from '../settings.js';
+import { INTERNAL_ENV, loadSettings } from '../settings.js';
 import { readStdin } from './stdin.js';
 import { handleContext } from './handlers/context.js';
 import { handlePrompt } from './handlers/prompt.js';
@@ -14,6 +14,8 @@ export type HookEvent = (typeof HOOK_EVENTS)[number];
  * anything to stdout except SessionStart's JSON, never block longer than the bounded timeouts.
  */
 export async function runHook(event: string): Promise<void> {
+  // Inside the worker's own compression session: record nothing, or it would compress itself forever.
+  if (process.env[INTERNAL_ENV]) return;
   try {
     const settings = loadSettings();
     const payload = await readStdin(settings.stdinTimeoutMs);

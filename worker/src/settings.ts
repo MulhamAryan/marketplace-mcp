@@ -20,6 +20,24 @@ export interface Settings {
   maxToolInputChars: number;
   /** Tools whose PostToolUse events carry no useful memory and are dropped. */
   skipTools: string[];
+  /** Model used to compress a turn into observations. */
+  compressionModel: string;
+  /** Path to the `claude` executable driven by the Agent SDK; empty = look it up on PATH. */
+  claudePath: string;
+  /** How often the worker looks for turns ready to compress, in ms. */
+  compressionIntervalMs: number;
+  /** A turn with no Stop event is compressed anyway once its oldest event is this old, in ms. */
+  orphanTurnAfterMs: number;
+  /** Wait this long after a Stop before compressing its turn, so late async tool events join it, in ms. */
+  turnSettleMs: number;
+  /** Abort one compression call after this long, in ms. */
+  compressionTimeoutMs: number;
+  /** A turn that failed this many times is marked failed and never retried. */
+  maxCompressionAttempts: number;
+  /** Cap on the characters of one turn sent to the model; the oldest tool events are dropped first. */
+  maxTurnInputChars: number;
+  /** Observation types that leave the machine (pushed to the team server). All others stay local. */
+  shareableTypes: string[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -34,7 +52,22 @@ export const DEFAULT_SETTINGS: Settings = {
     'TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TaskStop',
     'ToolSearch', 'ListMcpResourcesTool', 'AskUserQuestion', 'ExitPlanMode', 'EnterPlanMode',
   ],
+  compressionModel: 'claude-haiku-5-5',
+  claudePath: '',
+  compressionIntervalMs: 5000,
+  orphanTurnAfterMs: 10 * 60 * 1000,
+  turnSettleMs: 3000,
+  compressionTimeoutMs: 120000,
+  maxCompressionAttempts: 3,
+  maxTurnInputChars: 60000,
+  shareableTypes: ['Decision', 'BusinessRule', 'Pitfall', 'Documentation'],
 };
+
+/**
+ * Set on the Claude Code process the worker spawns for compression. Our own hooks see it and do
+ * nothing, so a compression session never records itself (belt and braces with settingSources: []).
+ */
+export const INTERNAL_ENV = 'EONIX_MEM_INTERNAL';
 
 /** Data directory: EONIX_MEM_DATA_DIR (tests, multiple profiles) or ~/.eonix-mem. */
 export function dataDir(): string {
