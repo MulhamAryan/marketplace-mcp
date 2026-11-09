@@ -88,8 +88,8 @@ The backend (Marketplace.Web + Marketplace.Mcp + Postgres) lives in the separate
 - **MCP tools AND hooks** → the same OAuth 2.1 `authorization_code` + PKCE + refresh session (federated
   to ADFS). No token to copy, nothing to set with `setx`.
 - Server hooks are wired as `mcp_tool` hooks (`hook_knowledge_check`, `hook_notes_check`,
-  `hook_consolidation_check` on the `marketplace` server; `hook_capture` and `hook_distill_reminder`
-  were replaced by the local worker in v0.7.0) instead of raw HTTP calls with
+  `hook_consolidation_check`, `hook_distill_reminder` on the `marketplace` server; `hook_capture` was
+  replaced by the local worker in v0.7.0) instead of raw HTTP calls with
   a static bearer token — they ride on whichever MCP session is already connected, so there's no separate
   credential to provision, rotate, or corrupt (the old static PAT model hit a real bug: `setx` silently
   truncates values over 1024 characters, and the PAT is a ~1400-char JWT).

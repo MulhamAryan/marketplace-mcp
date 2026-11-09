@@ -39,6 +39,19 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_distill_reminder",
+            "timeout": 6,
+            "input": {}
+          }
+        ]
+      }
     ]
   }
 }
