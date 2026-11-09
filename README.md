@@ -1,16 +1,24 @@
 # marketplace-mcp
 
 Claude Code **marketplace** for Eonix internal tooling. Hosts the `eonix-mcp` plugin: the Eonix MCP
-memory/knowledge connector (OAuth/ADFS) plus the auto-injection hooks.
+memory/knowledge connector (OAuth) plus the auto-injection hooks and **AI Eonix Memory**.
 
 One install gives a developer the Eonix memory/knowledge system:
 
-- **`marketplace` MCP server** registered as an **OAuth/ADFS connector** (first use opens a browser →
-  ADFS login on VPN; subsequent sessions renew silently).
+- **`marketplace` MCP server** registered as an **OAuth connector** (first use opens a browser →
+  marketplace login; subsequent sessions renew silently).
 - **Auto-injection hooks** (official knowledge + project notes + consolidation nudge on each prompt,
   episodic capture).
+- **AI Eonix Memory**: a local worker whose background AI agents write the team notes and consolidate
+  episodes, plus a SessionStart context (see below).
+
+Where to see the result: notes on <https://marketplace.eonix.be/Memory> (graph of links:
+<https://marketplace.eonix.be/Memory/Graph>), official norms on <https://marketplace.eonix.be/Knowledge>.
 
 ## Install (new dev)
+
+Prerequisite: **Node.js >= 22.5** on `PATH` (`node -v`). Without it the server hooks still work, but
+AI Eonix Memory does not run: no background note-taking, no consolidation.
 
 ```bash
 claude plugin marketplace add MulhamAryan/marketplace-mcp
@@ -18,8 +26,11 @@ claude plugin install eonix-mcp@eonix
 ```
 
 That's it — no env var, no PAT to copy, no `setx`. On first use (a hook firing, or a `marketplace`
-tool call), the browser opens for the ADFS login; Claude Code stores the resulting token itself and
-renews it silently from then on.
+tool call), the browser opens for the marketplace login; Claude Code stores the resulting token itself
+and renews it silently from then on.
+
+Update an existing install: `/plugin update` (or `claude plugin update eonix-mcp@eonix`), then
+`/reload-plugins` or restart Claude Code. The worker restarts by itself on the next hook.
 
 ## Prod mode vs dev mode
 
@@ -126,10 +137,66 @@ Claude opens more on demand through Bash:
 - `node worker/dist/eonix-mem.mjs search "<words>" [--all]` — full-text search (FTS5), index lines.
 - `node worker/dist/eonix-mem.mjs show <id> [<id>...]` — full notes.
 
+### Check and troubleshoot (Windows / PowerShell)
+
+The installed plugin lives in `%USERPROFILE%\.claude\plugins\cache\eonix\eonix-mcp\<version>`; the
+worker's data, logs and settings in `%USERPROFILE%\.eonix-mem`.
+
+```powershell
+# Shortcut to the installed CLI (adapt the version)
+$mem = "$env:USERPROFILE\.claude\plugins\cache\eonix\eonix-mcp\0.8.0\worker\dist\eonix-mem.mjs"
+
+node $mem status                                   # "AI Eonix Memory: running"
+Invoke-RestMethod http://127.0.0.1:37800/health | ConvertTo-Json   # agents + counters
+
+# Worker log: one "distilled — team notes: ..." line ~15 s after each turn
+Get-Content "$env:USERPROFILE\.eonix-mem\logs\worker.log" -Tail 20 -Encoding UTF8
+Get-Content "$env:USERPROFILE\.eonix-mem\logs\worker.log" -Tail 5 -Wait -Encoding UTF8   # live
+
+node $mem search "port"                            # local search (current project; --all for every project)
+node $mem show 12                                  # one note in full
+```
+
+What the log lines mean:
+
+| Line | Meaning |
+|---|---|
+| `agents on (claude-haiku-5-5 via …, plugin …)` | worker started, background agents active |
+| `turn <session>#<n> distilled — team notes: none` | turn read, nothing durable (the normal case) |
+| `turn … distilled — team notes: Pitfall pitfall:…` | a team note was written or updated → visible on /Memory |
+| `consolidation <project>: N note(s), N cluster(s) marked` | episodes consolidated (every 30 min) |
+| `agents off: claude=not found …` | `claude` not on `PATH` → set `claudePath` in settings.json |
+| `turn … distill failed — giving up` | 3 failed attempts; the turn is dropped (local capture kept) |
+
+Common problems:
+
+- **Nothing in the log / `status` says not running**: check `node -v` (>= 22.5). Without Node, Claude
+  Code itself reports the failing hook commands (`node` not found). With Node, look at
+  `%USERPROFILE%\.eonix-mem\logs\hook.log`: hook errors are written there, never shown to Claude.
+- **Port 37800 already used by something else**: set `"port": 37801` (any free port) in settings.json.
+- **Start over locally**: stop the worker (`Invoke-RestMethod -Method Post http://127.0.0.1:37800/api/shutdown`),
+  then delete `%USERPROFILE%\.eonix-mem`. Team notes on the server are not affected.
+
+Settings (`%USERPROFILE%\.eonix-mem\settings.json`, every key optional; full list and defaults in
+`worker/src/settings.ts`):
+
+| Key | Default | Purpose |
+|---|---|---|
+| `agentModel` | `claude-haiku-5-5` | model of the background agents |
+| `claudePath` | (auto, `where claude`) | path to `claude.exe` if not on `PATH` |
+| `turnSettleMs` | `3000` | wait after a turn ends before distilling it |
+| `orphanTurnAfterMs` | `600000` | a turn without end (session closed) is distilled after this |
+| `consolidationIntervalMs` | `1800000` | consolidation period (30 min) |
+| `consolidationClustersPerRun` | `3` | episode clusters consolidated per project per run |
+| `contextMaxTokens` | `1800` | budget of the local memory injected at session start |
+| `port` | `37800` | loopback port of the worker |
+
+Example: `{ "consolidationIntervalMs": 600000 }` to consolidate every 10 min.
+
 ## Auth model
 
-- **MCP tools AND hooks** → the same OAuth 2.1 `authorization_code` + PKCE + refresh session (federated
-  to ADFS). No token to copy, nothing to set with `setx`.
+- **MCP tools AND hooks** → the same OAuth 2.1 `authorization_code` + PKCE + refresh session (marketplace
+  login; ADFS federation was removed). No token to copy, nothing to set with `setx`.
 - Server hooks are wired as `mcp_tool` hooks (`hook_knowledge_check`, `hook_notes_check`,
   `hook_consolidation_check`, `hook_capture` on the `marketplace` server) instead of raw HTTP calls with
   a static bearer token — they ride on whichever MCP session is already connected, so there's no separate
