@@ -1,5 +1,5 @@
 {
-  "description": "eonix-mem local worker: raw capture, async compression, SessionStart context injection",
+  "description": "eonix-mem worker: single door to the Eonix server (episodes, notes, norms), background distill + consolidation agents, SessionStart context",
   "hooks": {
     "SessionStart": [
       {
@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "node --no-warnings \"${CLAUDE_PLUGIN_ROOT}/worker/dist/eonix-mem.mjs\" hook SessionStart",
-            "timeout": 15
+            "timeout": 25
           }
         ]
       }
@@ -18,7 +18,7 @@
           {
             "type": "command",
             "command": "node --no-warnings \"${CLAUDE_PLUGIN_ROOT}/worker/dist/eonix-mem.mjs\" hook UserPromptSubmit",
-            "timeout": 10
+            "timeout": 20
           }
         ]
       }

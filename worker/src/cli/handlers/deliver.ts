@@ -6,21 +6,23 @@ import { spoolWrite } from '../spool.js';
 import { log } from '../../log.js';
 
 /**
- * Sends one body to the worker. On failure: start the worker and retry once; if it is still
- * unreachable, spool the body so nothing is lost. Never throws.
+ * Sends one body to the worker and returns its answer. On failure: start the worker and retry once;
+ * if it is still unreachable, spool the body (replayed later, episodes included) and return null.
+ * Never throws.
  */
-export async function deliver(settings: Settings, route: IngestRoute, body: unknown): Promise<void> {
+export async function deliver<T = unknown>(
+  settings: Settings,
+  route: IngestRoute,
+  body: unknown,
+  timeoutMs = settings.hookTimeoutMs,
+): Promise<T | null> {
   try {
-    await workerPost(settings, route, body);
-    return;
+    return await workerPost<T>(settings, route, body, timeoutMs);
   } catch {
     // Worker down or slow: fall through to bootstrap.
   }
   try {
-    if (await ensureWorker(settings)) {
-      await workerPost(settings, route, body);
-      return;
-    }
+    if (await ensureWorker(settings)) return await workerPost<T>(settings, route, body, timeoutMs);
   } catch (err) {
     log('hook', `${route} retry failed`, err);
   }
@@ -30,4 +32,5 @@ export async function deliver(settings: Settings, route: IngestRoute, body: unkn
   } catch (err) {
     log('hook', `${route} lost: spool write failed`, err);
   }
+  return null;
 }

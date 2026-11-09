@@ -71,20 +71,36 @@ export function loadTurn(db: Db, key: TurnKey): TurnData | null {
   };
 }
 
-/** Stores the compressor's result for a turn and closes it, atomically. */
-export function saveCompressedTurn(db: Db, turn: TurnData, parsed: ParsedTurn, shareableTypes: string[]): number[] {
+/** A team note the agent wrote on the server (a successful remember call), mirrored locally. */
+export interface PushedNote {
+  type: string;
+  target: string;
+  content: string;
+}
+
+/**
+ * Stores a distilled turn and closes it, atomically: local observations (Change/Discovery), the
+ * local mirror of every team note the agent pushed through remember, and the turn summary.
+ */
+export function saveCompressedTurn(db: Db, turn: TurnData, parsed: ParsedTurn, pushed: PushedNote[] = []): number[] {
   return tx(db, () => {
     const ids: number[] = [];
     const insert = db.prepare(
       `INSERT INTO observations
-         (session_id, project, prompt_number, type, title, subtitle, narrative, facts, concepts, files, created_at, share_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (session_id, project, prompt_number, type, title, subtitle, narrative, facts, concepts, files, created_at, share_status, target)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
+    for (const n of pushed) {
+      const res = insert.run(
+        turn.key.sessionId, turn.project, turn.key.promptNumber, n.type, n.target, null, n.content,
+        '[]', '[]', '[]', now(), 'pushed', n.target,
+      );
+      ids.push(Number(res.lastInsertRowid));
+    }
     for (const o of parsed.observations) {
       const res = insert.run(
         turn.key.sessionId, turn.project, turn.key.promptNumber, o.type, o.title, o.subtitle, o.narrative,
-        JSON.stringify(o.facts), JSON.stringify(o.concepts), JSON.stringify(o.files), now(),
-        shareableTypes.includes(o.type) ? 'pending' : 'local',
+        JSON.stringify(o.facts), JSON.stringify(o.concepts), JSON.stringify(o.files), now(), 'local', null,
       );
       ids.push(Number(res.lastInsertRowid));
     }

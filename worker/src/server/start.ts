@@ -6,8 +6,11 @@ import { openDb } from '../storage/db.js';
 import { loadSettings, paths } from '../settings.js';
 import { spoolDrain } from '../cli/spool.js';
 import { log } from '../log.js';
-import { CompressionQueue } from '../compression/queue.js';
-import { AgentSdkProvider, resolveClaudePath } from '../compression/provider.js';
+import { DistillQueue } from '../compression/queue.js';
+import { ConsolidationJob } from '../compression/consolidation.js';
+import { AgentSdkProvider, resolveClaudePath, type AgentProvider } from '../compression/provider.js';
+import { OutboxSender } from './outbox-sender.js';
+import { serverConfigured } from './remote.js';
 
 /**
  * Runs the worker in the foreground. One worker per machine: the loopback port is the lock —
@@ -19,19 +22,30 @@ export function runWorker(): Promise<void> {
   const startedAt = Date.now();
   let server: Server;
   let drainTimer: NodeJS.Timeout | undefined;
-  let compression: CompressionQueue | undefined;
+
+  const claudePath = resolveClaudePath(settings);
+  const provider: AgentProvider | null = claudePath ? new AgentSdkProvider(settings, claudePath) : null;
+  const outbox = new OutboxSender(db, settings);
+  const distill = provider ? new DistillQueue(db, settings, provider) : null;
+  // Consolidation needs the server; distill still writes local summaries without it.
+  const consolidation = provider && serverConfigured(settings) ? new ConsolidationJob(db, settings, provider) : null;
 
   const drain = () => {
     const n = spoolDrain(
       (entry) => ingest(db, settings, entry.route, entry.body),
       (file, err) => log('worker', `spool entry ${file} rejected`, err),
     );
-    if (n > 0) log('worker', `drained ${n} spooled event(s)`);
+    if (n > 0) {
+      log('worker', `drained ${n} spooled event(s)`);
+      void outbox.flush();
+    }
   };
 
   const shutdown = () => {
     if (drainTimer) clearInterval(drainTimer);
-    compression?.stop();
+    outbox.stop();
+    distill?.stop();
+    consolidation?.stop();
     server.close(() => {
       db.close();
       try {
@@ -45,20 +59,22 @@ export function runWorker(): Promise<void> {
   };
 
   return new Promise((resolve) => {
-    server = createApp({ db, settings, startedAt, shutdown }).listen(settings.port, '127.0.0.1');
+    const app = createApp({ db, settings, startedAt, provider, kickOutbox: () => void outbox.flush(), shutdown });
+    server = app.listen(settings.port, '127.0.0.1');
     server.on('listening', () => {
       fs.writeFileSync(paths.pid(), String(process.pid));
       log('worker', `listening on 127.0.0.1:${settings.port} (pid ${process.pid})`);
+      log('worker', serverConfigured(settings)
+        ? `server ${settings.serverUrl}`
+        : 'server not configured: set EONIX_HOOK_TOKEN — episodes wait in the outbox, no notes injected or written');
+      log('worker', provider
+        ? `agents on (${settings.agentModel} via ${claudePath})`
+        : 'agents off: no `claude` executable found (set claudePath in settings.json)');
       drain();
       drainTimer = setInterval(drain, settings.spoolDrainIntervalMs);
-      const claudePath = resolveClaudePath(settings);
-      if (claudePath) {
-        compression = new CompressionQueue(db, settings, new AgentSdkProvider(settings, claudePath));
-        compression.start();
-        log('worker', `compression on (${settings.compressionModel} via ${claudePath})`);
-      } else {
-        log('worker', 'compression off: no `claude` executable found (set claudePath in settings.json)');
-      }
+      outbox.start();
+      distill?.start();
+      consolidation?.start();
       resolve();
     });
     server.on('error', (err: NodeJS.ErrnoException) => {

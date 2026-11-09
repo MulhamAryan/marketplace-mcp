@@ -8,39 +8,68 @@ export interface Settings {
   port: number;
   /** Timeout of a hook -> worker HTTP call, in ms. A hook must never block Claude Code. */
   hookTimeoutMs: number;
+  /** Timeout of the UserPromptSubmit hook -> worker call, which waits for notes/knowledge, in ms. */
+  promptHookTimeoutMs: number;
   /** How long a hook waits for a freshly spawned worker to answer /health, in ms. */
   startupWaitMs: number;
   /** Max wait for the hook payload on stdin, in ms. */
   stdinTimeoutMs: number;
   /** How often the worker replays the spool written while it was down, in ms. */
   spoolDrainIntervalMs: number;
-  /** Tool responses longer than this are truncated before storage. */
+  /** Tool responses longer than this are truncated before local storage. */
   maxToolResponseChars: number;
-  /** Tool inputs longer than this are truncated before storage. */
+  /** Tool inputs longer than this are truncated before local storage. */
   maxToolInputChars: number;
-  /** Tools whose PostToolUse events carry no useful memory and are dropped. */
+  /** Tools whose PostToolUse events carry no useful memory and are not stored locally. */
   skipTools: string[];
-  /** Model used to compress a turn into observations. */
-  compressionModel: string;
+
+  /** Eonix MCP server base URL; EONIX_MCP_URL (same variable as .mcp.json) wins when set. */
+  serverUrl: string;
+  /** Bearer token for the server; EONIX_HOOK_TOKEN wins when set. Same client_credentials token as the legacy HTTP hooks. */
+  serverToken: string;
+  /** Timeout of one worker -> server HTTP call, in ms. */
+  serverTimeoutMs: number;
+  /** Tools whose PostToolUse events are relayed to the server as episodes — the matcher hook_capture had. */
+  captureTools: string[];
+  /** How often the outbox of server episodes is flushed, in ms. */
+  outboxIntervalMs: number;
+  /** An outbox entry that failed this many times is dropped. */
+  outboxMaxAttempts: number;
+
+  /** Model of every background agent (distill, consolidation, note triage). */
+  agentModel: string;
   /** Path to the `claude` executable driven by the Agent SDK; empty = look it up on PATH. */
   claudePath: string;
-  /** How often the worker looks for turns ready to compress, in ms. */
-  compressionIntervalMs: number;
-  /** A turn with no Stop event is compressed anyway once its oldest event is this old, in ms. */
+  /** How often the worker looks for finished turns to distill, in ms. */
+  distillIntervalMs: number;
+  /** A turn with no Stop event is distilled anyway once its oldest event is this old, in ms. */
   orphanTurnAfterMs: number;
-  /** Wait this long after a Stop before compressing its turn, so late async tool events join it, in ms. */
+  /** Wait this long after a Stop before distilling its turn, so late async tool events join it, in ms. */
   turnSettleMs: number;
-  /** Abort one compression call after this long, in ms. */
-  compressionTimeoutMs: number;
+  /** Abort one distill agent run after this long, in ms. */
+  distillTimeoutMs: number;
   /** A turn that failed this many times is marked failed and never retried. */
-  maxCompressionAttempts: number;
-  /** Cap on the characters of one turn sent to the model; the oldest tool events are dropped first. */
+  maxDistillAttempts: number;
+  /** Cap on the characters of one turn sent to the distill agent; the oldest tool events are dropped first. */
   maxTurnInputChars: number;
-  /** Observation types that leave the machine (pushed to the team server). All others stay local. */
-  shareableTypes: string[];
-  /** Token budget of the context injected at SessionStart (Claude Code caps it at 10,000 characters). */
+
+  /** How often the consolidation agent runs, in ms. */
+  consolidationIntervalMs: number;
+  /** Clusters of episodes the consolidation agent handles per project and per run. */
+  consolidationClustersPerRun: number;
+  /** Abort one consolidation agent run after this long, in ms. */
+  consolidationTimeoutMs: number;
+  /** Only projects with a local session in this window are consolidated, in days. */
+  consolidationActiveProjectDays: number;
+
+  /** Above this many notes + norms for a prompt, the triage agent keeps only the relevant ones. */
+  triageThreshold: number;
+  /** Abort the triage agent after this long and inject the untriaged results, in ms. */
+  triageTimeoutMs: number;
+
+  /** Token budget of the local part of the SessionStart context. */
   contextMaxTokens: number;
-  /** Hard character cap of the injected context, kept under Claude Code's 10,000-character limit. */
+  /** Hard character cap of the whole SessionStart context, under Claude Code's 10,000-character limit. */
   contextMaxChars: number;
   /** Number of recent session summaries shown at SessionStart. */
   contextSummaries: number;
@@ -53,6 +82,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   port: 37800,
   hookTimeoutMs: 1500,
+  promptHookTimeoutMs: 15000,
   startupWaitMs: 4000,
   stdinTimeoutMs: 1000,
   spoolDrainIntervalMs: 30000,
@@ -62,16 +92,32 @@ export const DEFAULT_SETTINGS: Settings = {
     'TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TaskStop',
     'ToolSearch', 'ListMcpResourcesTool', 'AskUserQuestion', 'ExitPlanMode', 'EnterPlanMode',
   ],
-  compressionModel: 'claude-haiku-5-5',
+
+  serverUrl: 'https://mcp.marketplace.eonix.be',
+  serverToken: '',
+  serverTimeoutMs: 8000,
+  captureTools: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'PowerShell'],
+  outboxIntervalMs: 3000,
+  outboxMaxAttempts: 50,
+
+  agentModel: 'claude-haiku-5-5',
   claudePath: '',
-  compressionIntervalMs: 5000,
+  distillIntervalMs: 5000,
   orphanTurnAfterMs: 10 * 60 * 1000,
   turnSettleMs: 3000,
-  compressionTimeoutMs: 120000,
-  maxCompressionAttempts: 3,
+  distillTimeoutMs: 180000,
+  maxDistillAttempts: 3,
   maxTurnInputChars: 60000,
-  shareableTypes: ['Decision', 'BusinessRule', 'Pitfall', 'Documentation'],
-  contextMaxTokens: 2200,
+
+  consolidationIntervalMs: 30 * 60 * 1000,
+  consolidationClustersPerRun: 3,
+  consolidationTimeoutMs: 300000,
+  consolidationActiveProjectDays: 14,
+
+  triageThreshold: 5,
+  triageTimeoutMs: 8000,
+
+  contextMaxTokens: 1800,
   contextMaxChars: 9500,
   contextSummaries: 3,
   contextFullObservations: 5,
@@ -79,8 +125,8 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 /**
- * Set on the Claude Code process the worker spawns for compression. Our own hooks see it and do
- * nothing, so a compression session never records itself (belt and braces with settingSources: []).
+ * Set on the Claude Code process the worker spawns for its agents. Our own hooks see it and do
+ * nothing, so an agent session never records itself (belt and braces with settingSources: []).
  */
 export const INTERNAL_ENV = 'EONIX_MEM_INTERNAL';
 
@@ -107,6 +153,9 @@ export function loadSettings(): Settings {
   const settings = { ...DEFAULT_SETTINGS, ...user };
   const envPort = Number(process.env.EONIX_MEM_PORT);
   if (Number.isInteger(envPort) && envPort > 0) settings.port = envPort;
+  if (process.env.EONIX_MCP_URL) settings.serverUrl = process.env.EONIX_MCP_URL;
+  if (process.env.EONIX_HOOK_TOKEN) settings.serverToken = process.env.EONIX_HOOK_TOKEN;
+  settings.serverUrl = settings.serverUrl.replace(/\/+$/, '');
   return settings;
 }
 

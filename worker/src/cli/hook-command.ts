@@ -29,9 +29,15 @@ export async function runHook(event: string): Promise<void> {
         }
         break;
       }
-      case 'UserPromptSubmit':
-        await handlePrompt(settings, payload);
+      case 'UserPromptSubmit': {
+        const context = await handlePrompt(settings, payload);
+        if (context) {
+          process.stdout.write(
+            JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: context } }),
+          );
+        }
         break;
+      }
       case 'PostToolUse':
       case 'PostToolUseFailure':
         await handleObservation(settings, payload, event);

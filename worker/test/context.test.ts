@@ -19,14 +19,16 @@ function seed(db: Db, n: number, narrative = 'Une explication courte.') {
     ingestPrompt(db, { sessionId, cwd: CWD, prompt: `demande ${i}` });
     ingestSummary(db, { sessionId, cwd: CWD, lastAssistantMessage: 'ok' });
     const turn = loadTurn(db, { sessionId, promptNumber: 1 })!;
-    const obs: ParsedObservation = {
-      type: i % 2 ? 'Pitfall' : 'Change', title: `Observation numéro ${i}`, subtitle: null,
+    // Odd turns: a team note the agent pushed (mirrored locally). Even turns: a local Change.
+    const pushed = i % 2 ? [{ type: 'Pitfall', target: `Observation numéro ${i}`, content: `${narrative} winnat` }] : [];
+    const obs: ParsedObservation[] = i % 2 ? [] : [{
+      type: 'Change', title: `Observation numéro ${i}`, subtitle: null,
       narrative, facts: [`fait ${i}`], concepts: ['winnat'], files: ['a.ts'],
-    };
+    }];
     saveCompressedTurn(db, turn, {
-      skip: false, observations: [obs],
+      skip: false, observations: obs,
       summary: { request: `demande ${i}`, investigated: null, learned: null, completed: `fait ${i}`, nextSteps: null },
-    }, settings.shareableTypes);
+    }, pushed);
   }
 }
 
@@ -48,7 +50,7 @@ test('context: summaries, recent observations in full, older ones in the index w
   assert.match(ctx, /### #8 \[Change\]/);
   assert.doesNotMatch(ctx, /### #7 /, 'only contextFullObservations=5 in full');
   assert.match(ctx, /- #7 \d{4}-\d\d-\d\d \[Pitfall\] Observation numéro 7 \(~\d+ tok\)/);
-  assert.match(ctx, /à partager/, 'shareable but not pushed yet');
+  assert.match(ctx, /partagée équipe/, 'team note written on the server');
 });
 
 test('context never exceeds the token budget or the character cap, and says what it hid', () => {

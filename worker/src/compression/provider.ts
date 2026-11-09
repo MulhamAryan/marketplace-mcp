@@ -2,10 +2,37 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { INTERNAL_ENV, type Settings } from '../settings.js';
+import { mcpServerConfig, serverConfigured } from '../server/remote.js';
 
-/** One single-turn, tool-less LLM call. Abstracted so the queue is testable without a model. */
-export interface CompressionProvider {
-  complete(systemPrompt: string, userPrompt: string): Promise<string>;
+/** Name under which the Eonix MCP server is mounted in agent sessions: tools are mcp__eonix__<tool>. */
+export const EONIX_MCP = 'eonix';
+
+export interface AgentRequest {
+  systemPrompt: string;
+  prompt: string;
+  /** Eonix MCP tools the agent may call (bare names, e.g. 'remember'). Empty = no tools at all. */
+  mcpTools: string[];
+  maxTurns: number;
+  timeoutMs: number;
+}
+
+export interface AgentToolCall {
+  /** Bare tool name, e.g. 'remember'. */
+  tool: string;
+  input: Record<string, unknown>;
+  ok: boolean;
+  /** Text of the tool result (e.g. remember's JSON with the note Id). */
+  result: string;
+}
+
+export interface AgentResult {
+  text: string;
+  toolCalls: AgentToolCall[];
+}
+
+/** One background agent run. Abstracted so the queues are testable without a model or a server. */
+export interface AgentProvider {
+  run(req: AgentRequest): Promise<AgentResult>;
 }
 
 /**
@@ -26,30 +53,46 @@ export function resolveClaudePath(settings: Settings): string | null {
   }
 }
 
+const textOf = (content: unknown): string =>
+  typeof content === 'string'
+    ? content
+    : Array.isArray(content)
+      ? content.map((b) => (b && typeof b === 'object' && 'text' in b ? String((b as { text: unknown }).text) : '')).join('')
+      : '';
+
 /**
- * Claude Agent SDK provider: runs the installed Claude Code headless with the developer's own
- * login, isolated from every local setting so none of our plugin hooks fire in the child session.
+ * Claude Agent SDK provider: runs the installed Claude Code headless with the developer's own login,
+ * isolated from every local setting so none of our plugin hooks fire in the child session. The only
+ * tools it can reach are the listed Eonix MCP tools, on the same /mcp endpoint with the same token
+ * as the rest of the worker; anything else is refused (permission mode dontAsk).
  */
-export class AgentSdkProvider implements CompressionProvider {
+export class AgentSdkProvider implements AgentProvider {
   constructor(
     private readonly settings: Settings,
     private readonly claudePath: string,
   ) {}
 
-  async complete(systemPrompt: string, userPrompt: string): Promise<string> {
+  async run(req: AgentRequest): Promise<AgentResult> {
+    if (req.mcpTools.length > 0 && !serverConfigured(this.settings)) {
+      throw new Error('agent needs the Eonix server but no token is configured');
+    }
     const abortController = new AbortController();
-    const timer = setTimeout(() => abortController.abort(), this.settings.compressionTimeoutMs);
+    const timer = setTimeout(() => abortController.abort(), req.timeoutMs);
+    const pending = new Map<string, { tool: string; input: Record<string, unknown> }>();
+    const toolCalls: AgentToolCall[] = [];
     try {
       const q = query({
-        prompt: userPrompt,
+        prompt: req.prompt,
         options: {
-          model: this.settings.compressionModel,
-          systemPrompt,
+          model: this.settings.agentModel,
+          systemPrompt: req.systemPrompt,
           tools: [],
-          maxTurns: 1,
+          maxTurns: req.maxTurns,
           settingSources: [],
           strictMcpConfig: true,
-          mcpServers: {},
+          mcpServers: req.mcpTools.length > 0 ? { [EONIX_MCP]: mcpServerConfig(this.settings) } : {},
+          allowedTools: req.mcpTools.map((t) => `mcp__${EONIX_MCP}__${t}`),
+          permissionMode: 'dontAsk',
           persistSession: false,
           pathToClaudeCodeExecutable: this.claudePath,
           env: { ...process.env, [INTERNAL_ENV]: '1', CLAUDE_AGENT_SDK_CLIENT_APP: 'eonix-mem' },
@@ -57,11 +100,29 @@ export class AgentSdkProvider implements CompressionProvider {
         },
       });
       for await (const message of q) {
-        if (message.type !== 'result') continue;
-        if (message.subtype === 'success' && !message.is_error) return message.result;
-        throw new Error(`compression call ended with ${message.subtype}`);
+        if (message.type === 'assistant') {
+          for (const block of message.message.content) {
+            if (block.type === 'tool_use' && block.name.startsWith(`mcp__${EONIX_MCP}__`)) {
+              pending.set(block.id, {
+                tool: block.name.slice(`mcp__${EONIX_MCP}__`.length),
+                input: (block.input ?? {}) as Record<string, unknown>,
+              });
+            }
+          }
+        } else if (message.type === 'user' && Array.isArray(message.message.content)) {
+          for (const block of message.message.content) {
+            if (block.type !== 'tool_result') continue;
+            const call = pending.get(block.tool_use_id);
+            if (!call) continue;
+            pending.delete(block.tool_use_id);
+            toolCalls.push({ ...call, ok: !block.is_error, result: textOf(block.content) });
+          }
+        } else if (message.type === 'result') {
+          if (message.subtype === 'success' && !message.is_error) return { text: message.result, toolCalls };
+          throw new Error(`agent run ended with ${message.subtype}`);
+        }
       }
-      throw new Error('compression call returned no result');
+      throw new Error('agent run returned no result');
     } finally {
       clearTimeout(timer);
     }

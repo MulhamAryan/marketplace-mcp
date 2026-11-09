@@ -1,6 +1,6 @@
 import type { Settings } from '../settings.js';
 
-/** Thin HTTP client from hooks to the local worker. Every call is bounded by hookTimeoutMs. */
+/** Thin HTTP client from hooks to the local worker. Every call is bounded. */
 const base = (settings: Settings) => `http://127.0.0.1:${settings.port}`;
 
 export async function workerHealthy(settings: Settings): Promise<boolean> {
@@ -15,15 +15,20 @@ export async function workerHealthy(settings: Settings): Promise<boolean> {
   }
 }
 
-export async function workerPost(settings: Settings, route: string, body: unknown): Promise<unknown> {
+export async function workerPost<T = unknown>(
+  settings: Settings,
+  route: string,
+  body: unknown,
+  timeoutMs = settings.hookTimeoutMs,
+): Promise<T> {
   const res = await fetch(`${base(settings)}/api/${route}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(settings.hookTimeoutMs),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`worker ${route} -> HTTP ${res.status}`);
-  return res.json();
+  return (await res.json()) as T;
 }
 
 export async function workerGet<T>(settings: Settings, pathAndQuery: string): Promise<T> {

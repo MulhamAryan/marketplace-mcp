@@ -1,7 +1,7 @@
-import { OBSERVATION_TYPES, type ObservationType } from './prompts.js';
+import { LOCAL_TYPES, type LocalType } from './prompts.js';
 
 export interface ParsedObservation {
-  type: ObservationType;
+  type: LocalType;
   title: string;
   subtitle: string | null;
   narrative: string | null;
@@ -47,9 +47,10 @@ function list(xml: string, container: string, item: string): string[] {
 }
 
 /**
- * Tolerant parser of the compressor's XML. Unknown types fall back to Discovery (local only),
- * so a model slip can never promote something to shared team memory. Throws only when the
- * output has neither <skip/>, an observation nor a summary — the turn is then retried.
+ * Tolerant parser of the local part of the distill agent's answer (summary + local observations).
+ * Team notes never come from here: they only exist through a successful remember call. Any XML
+ * observation type other than Change becomes Discovery, so nothing in the XML can masquerade as a note.
+ * Throws only when the answer has neither <skip/>, an observation nor a summary — the turn is then retried.
  */
 export function parseTurnOutput(text: string): ParsedTurn {
   const observations: ParsedObservation[] = [];
@@ -58,7 +59,7 @@ export function parseTurnOutput(text: string): ParsedTurn {
     const title = tag(body, 'title');
     if (!title) continue;
     const rawType = (m[1] ?? '').trim();
-    const type = (OBSERVATION_TYPES as readonly string[]).includes(rawType) ? (rawType as ObservationType) : 'Discovery';
+    const type: LocalType = (LOCAL_TYPES as readonly string[]).includes(rawType) ? (rawType as LocalType) : 'Discovery';
     observations.push({
       type,
       title,
@@ -81,9 +82,9 @@ export function parseTurnOutput(text: string): ParsedTurn {
       }
     : null;
 
-  const skip = /<skip\s*\/>/.test(text) && observations.length === 0;
+  const skip = /<skip\s*\/>/.test(text) && observations.length === 0 && !summary;
   if (!skip && observations.length === 0 && !summary) {
-    throw new Error('compressor output has no <observation>, <summary> or <skip/>');
+    throw new Error('agent answer has no <observation>, <summary> or <skip/>');
   }
   return { skip, observations, summary };
 }
