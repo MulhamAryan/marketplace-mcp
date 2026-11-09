@@ -42,7 +42,9 @@ export interface Settings {
   /** Cap on the characters of one turn sent to the distill agent; the oldest tool events are dropped first. */
   maxTurnInputChars: number;
 
-  /** How often the consolidation agent runs, in ms. */
+  /** Consolidation runs this long after a turn is distilled (turns in quick succession share one run), in ms. */
+  consolidationDebounceMs: number;
+  /** Fallback sweep of every active project, in case no turn triggered a run, in ms. */
   consolidationIntervalMs: number;
   /** Clusters of episodes the consolidation agent handles per project and per run. */
   consolidationClustersPerRun: number;
@@ -87,8 +89,9 @@ export const DEFAULT_SETTINGS: Settings = {
   maxDistillAttempts: 3,
   maxTurnInputChars: 60000,
 
-  consolidationIntervalMs: 30 * 60 * 1000,
-  consolidationClustersPerRun: 3,
+  consolidationDebounceMs: 30000,
+  consolidationIntervalMs: 10 * 60 * 1000,
+  consolidationClustersPerRun: 5,
   consolidationTimeoutMs: 300000,
   consolidationActiveProjectDays: 14,
 
