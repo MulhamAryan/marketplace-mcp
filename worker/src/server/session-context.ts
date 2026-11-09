@@ -1,5 +1,5 @@
 import type { Db } from '../storage/db.js';
-import type { Settings } from '../settings.js';
+import { PRODUCT_NAME, type Settings } from '../settings.js';
 import { buildContext } from '../context/builder.js';
 
 /**
@@ -7,7 +7,7 @@ import { buildContext } from '../context/builder.js';
  * answers the consolidation nudge that hook_consolidation_check still appends server-side.
  */
 export const BACKGROUND_NOTICE =
-  "La mémoire d'équipe est alimentée automatiquement en arrière-plan par eonix-mem : à la fin de chaque " +
+  `La mémoire d'équipe est alimentée automatiquement en arrière-plan par ${PRODUCT_NAME} : à la fin de chaque ` +
   'tour, un agent applique les règles de distillation (list_cibles puis remember), et un autre consolide ' +
   'les épisodes en attente (pending_consolidations). Ne le fais pas toi-même, même si un rappel te le ' +
   'propose, sauf si le développeur le demande explicitement.';

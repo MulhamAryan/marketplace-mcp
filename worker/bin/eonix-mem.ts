@@ -1,11 +1,11 @@
 import { runHook } from '../src/cli/hook-command.js';
-import { loadSettings } from '../src/settings.js';
+import { loadSettings, PRODUCT_NAME } from '../src/settings.js';
 import { workerGet, workerHealthy } from '../src/cli/client.js';
 import { ensureWorker } from '../src/server/bootstrap.js';
 import { projectFromCwd } from '../src/project.js';
 
 /**
- * eonix-mem CLI
+ * AI Eonix Memory CLI (eonix-mem)
  *   start                        run the worker in the foreground (spawned detached by hooks)
  *   hook <event>                 Claude Code hook entry point
  *   status                       print whether the worker answers /health
@@ -30,7 +30,7 @@ async function main(argv: string[]): Promise<void> {
       return;
     case 'status': {
       const ok = await workerHealthy(loadSettings());
-      process.stdout.write(ok ? 'eonix-mem worker: running\n' : 'eonix-mem worker: not running\n');
+      process.stdout.write(ok ? `${PRODUCT_NAME}: running\n` : `${PRODUCT_NAME}: not running\n`);
       process.exitCode = ok ? 0 : 1;
       return;
     }
@@ -38,7 +38,7 @@ async function main(argv: string[]): Promise<void> {
     case 'show': {
       const settings = loadSettings();
       if (!(await ensureWorker(settings))) {
-        process.stdout.write('eonix-mem worker unavailable\n');
+        process.stdout.write(`${PRODUCT_NAME}: worker unavailable\n`);
         process.exitCode = 1;
         return;
       }
@@ -53,7 +53,7 @@ async function main(argv: string[]): Promise<void> {
       return;
     }
     default:
-      process.stdout.write('usage: eonix-mem start | hook <event> | status | search "<words>" [--all] | show <id>...\n');
+      process.stdout.write(`${PRODUCT_NAME}\nusage: eonix-mem start | hook <event> | status | search "<words>" [--all] | show <id>...\n`);
       process.exitCode = command ? 2 : 0;
   }
 }

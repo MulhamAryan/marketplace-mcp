@@ -43,7 +43,7 @@ test('context: summaries, recent observations in full, older ones in the index w
   const db = openDb(':memory:');
   seed(db, 12);
   const ctx = buildContext(db, settings, CWD, 'cli.mjs');
-  assert.match(ctx, /# Mémoire locale \(eonix-mem\) — demo/);
+  assert.match(ctx, /# AI Eonix Memory — mémoire locale de demo/);
   assert.match(ctx, /show <id>/);
   assert.match(ctx, /## Dernières sessions\n- \d{4}-\d\d-\d\d — demande 12 → fait 12/);
   assert.match(ctx, /### #12 \[Change\] Observation numéro 12/);

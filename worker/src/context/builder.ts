@@ -1,5 +1,5 @@
 import type { Db } from '../storage/db.js';
-import type { Settings } from '../settings.js';
+import { PRODUCT_NAME, type Settings } from '../settings.js';
 import { projectFromCwd } from '../project.js';
 import { recentObservations, recentSummaries } from '../storage/observations.js';
 import { ContextBudget } from './budget.js';
@@ -20,7 +20,7 @@ export function buildContext(db: Db, settings: Settings, cwd: string | undefined
   const budget = new ContextBudget(settings.contextMaxTokens, settings.contextMaxChars);
   const cli = `node "${cliPath}"`;
   budget.tryAdd(
-    `# Mémoire locale (eonix-mem) — ${project}\n` +
+    `# ${PRODUCT_NAME} — mémoire locale de ${project}\n` +
       `Extraits des sessions précédentes sur ce poste. Pour le détail : \`${cli} show <id>\` ; ` +
       `pour chercher : \`${cli} search "<mots>"\`.`,
   );

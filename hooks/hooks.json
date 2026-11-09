@@ -1,5 +1,5 @@
 {
-  "description": "eonix-mem local worker: local capture, background distill + consolidation agents, SessionStart context",
+  "description": "AI Eonix Memory (local worker): local capture, background distill + consolidation agents, SessionStart context",
   "hooks": {
     "SessionStart": [
       {

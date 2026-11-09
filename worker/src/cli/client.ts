@@ -1,4 +1,4 @@
-import type { Settings } from '../settings.js';
+import { PRODUCT_NAME, type Settings } from '../settings.js';
 
 /** Thin HTTP client from hooks to the local worker. Every call is bounded. */
 const base = (settings: Settings) => `http://127.0.0.1:${settings.port}`;
@@ -9,7 +9,7 @@ export async function workerHealthy(settings: Settings): Promise<boolean> {
     if (!res.ok) return false;
     const body = (await res.json()) as { name?: string };
     // Guard against an unrelated service squatting the port.
-    return body.name === 'eonix-mem';
+    return body.name === PRODUCT_NAME;
   } catch {
     return false;
   }

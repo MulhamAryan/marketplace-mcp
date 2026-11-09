@@ -81,7 +81,7 @@ const textOf = (content: unknown): string =>
 /**
  * Claude Agent SDK provider: runs the installed Claude Code headless with the developer's own login.
  * Isolated from every local setting; loads only this plugin, for its OAuth MCP connector, with ALL
- * hooks disabled — the plugin's own hooks (hook_capture, notes check, eonix-mem) must never run in an
+ * hooks disabled — the plugin's own hooks (hook_capture, notes check, AI Eonix Memory) must never run in an
  * agent session, or it would record itself. The only tools it can call are the listed Eonix MCP
  * tools; anything else is refused (permission mode dontAsk).
  */
@@ -113,7 +113,7 @@ export class AgentSdkProvider implements AgentProvider {
           permissionMode: 'dontAsk',
           persistSession: false,
           pathToClaudeCodeExecutable: this.claudePath,
-          env: { ...process.env, [INTERNAL_ENV]: '1', CLAUDE_AGENT_SDK_CLIENT_APP: 'eonix-mem' },
+          env: { ...process.env, [INTERNAL_ENV]: '1', CLAUDE_AGENT_SDK_CLIENT_APP: 'ai-eonix-memory' },
           abortController,
         },
       });

@@ -53,7 +53,7 @@ Switch back to prod mode — remove the override and restart Claude Code:
 ```
 .claude-plugin/marketplace.json   marketplace manifest (name: eonix)
 .claude-plugin/plugin.json        server hooks (mcp_tool): knowledge, notes, consolidation reminder, episodic capture
-hooks/hooks.json                  command hooks of the local eonix-mem worker (all events)
+hooks/hooks.json                  command hooks of AI Eonix Memory, the local worker (all events)
 .mcp.json                         the `marketplace` MCP server (HTTP + OAuth, alwaysLoad: true)
 worker/                           eonix-mem worker sources (TypeScript); dist/eonix-mem.mjs is the committed bundle
 ```
@@ -79,7 +79,7 @@ Team notes, episodes and their types are exactly the same as before; only the ac
 and consolidation changes (a background agent instead of the developer's session, which no longer
 gets interrupted at each turn end — `hook_distill_reminder` was removed in v0.8.0).
 
-## Local worker (eonix-mem)
+## AI Eonix Memory (local worker)
 
 Inspired by [claude-mem](https://github.com/thedotmack/claude-mem) (Apache-2.0, see `NOTICE`):
 same flow, our own code.

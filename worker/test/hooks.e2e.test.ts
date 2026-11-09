@@ -59,7 +59,7 @@ test('first hook starts the worker on demand, then the turn is captured locally'
   await hook('Stop', { session_id: 'e2e', cwd, last_assistant_message: 'Renamed.' });
 
   const h = await health();
-  assert.equal(h.name, 'eonix-mem');
+  assert.equal(h.name, 'AI Eonix Memory');
   assert.match(h.agents, /^off/);
   assert.equal(h.counts.sessions, 1);
   assert.equal(h.counts.prompts, 1);

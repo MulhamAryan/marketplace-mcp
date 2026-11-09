@@ -105,6 +105,9 @@ export const DEFAULT_SETTINGS: Settings = {
  */
 export const INTERNAL_ENV = 'EONIX_MEM_INTERNAL';
 
+/** Product name shown to people and to Claude (technical ids stay eonix-mem: paths, env vars, bundle). */
+export const PRODUCT_NAME = 'AI Eonix Memory';
+
 /** Data directory: EONIX_MEM_DATA_DIR (tests, multiple profiles) or ~/.eonix-mem. */
 export function dataDir(): string {
   return process.env.EONIX_MEM_DATA_DIR || path.join(os.homedir(), '.eonix-mem');

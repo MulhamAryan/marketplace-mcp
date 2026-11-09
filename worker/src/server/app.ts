@@ -1,6 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import type { Db } from '../storage/db.js';
-import type { Settings } from '../settings.js';
+import { PRODUCT_NAME, type Settings } from '../settings.js';
 import { counts } from '../storage/stats.js';
 import { BadRequest, ingest, type IngestRoute } from './ingest.js';
 import { log } from '../log.js';
@@ -31,7 +31,7 @@ export function createApp(deps: AppDeps) {
   app.get('/health', (_req, res) => {
     res.json({
       ok: true,
-      name: 'eonix-mem',
+      name: PRODUCT_NAME,
       version: WORKER_VERSION,
       pid: process.pid,
       port: settings.port,
