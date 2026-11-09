@@ -1,0 +1,11 @@
+eonix-mcp plugin — AI Eonix Memory (local worker)
+Copyright Eonix
+
+The design of the AI Eonix Memory worker (hook CLI, on-demand local worker, raw capture with
+asynchronous LLM compression, SessionStart context injection, layered search) is inspired by
+claude-mem by Alex Newman (thedotmack), https://github.com/thedotmack/claude-mem,
+licensed under the Apache License, Version 2.0. The code in this repository is an independent
+rewrite and contains no source copied from claude-mem.
+
+This bundle (worker/dist/eonix-mem.mjs) includes third-party npm packages, notably Express
+(MIT License) and the Claude Agent SDK (@anthropic-ai/claude-agent-sdk). Their licenses are available in their respective packages on npm.
