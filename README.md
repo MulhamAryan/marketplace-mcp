@@ -52,11 +52,32 @@ Switch back to prod mode — remove the override and restart Claude Code:
 
 ```
 .claude-plugin/marketplace.json   marketplace manifest (name: eonix)
-.claude-plugin/plugin.json        mcp_tool hooks (UserPromptSubmit: knowledge, notes, consolidation reminder)
+.claude-plugin/plugin.json        server hooks (mcp_tool): knowledge, notes, consolidation reminder, episodic capture
 hooks/hooks.json                  command hooks of the local eonix-mem worker (all events)
 .mcp.json                         the `marketplace` MCP server (HTTP + OAuth, alwaysLoad: true)
 worker/                           eonix-mem worker sources (TypeScript); dist/eonix-mem.mjs is the committed bundle
 ```
+
+Single-plugin marketplace, so the plugin's own files live at the repo root instead of under a
+`plugins/<name>/` subdirectory (`marketplace.json`'s `source` is `"."`).
+
+The backend (Marketplace.Web + Marketplace.Mcp + Postgres) lives in the separate
+`skill-marketplace` repository. **The worker needs no server change**: it only uses existing MCP tools.
+
+## What the plugin does
+
+| When | What | Who |
+|---|---|---|
+| Every prompt | relevant team notes + official norms injected | `hook_notes_check`, `hook_knowledge_check` (unchanged) |
+| Every prompt, edit, command, end of turn | episode sent to the server | `hook_capture` (unchanged) |
+| Every prompt, tool call, end of turn | full turn kept locally (tool results included) | worker |
+| End of each turn (Stop + 3 s) | team distill rules applied: `list_cibles` then `remember`, or nothing | worker, **distill agent** |
+| Every 30 min | pending episodes consolidated: `pending_consolidations` → `remember` → `mark_consolidated` | worker, **consolidation agent** |
+| Session start | background notice + local memory of the project | worker |
+
+Team notes, episodes and their types are exactly the same as before; only the actor of the distill
+and consolidation changes (a background agent instead of the developer's session, which no longer
+gets interrupted at each turn end — `hook_distill_reminder` was removed in v0.8.0).
 
 ## Local worker (eonix-mem)
 
@@ -73,57 +94,49 @@ same flow, our own code.
 - No UI on the worker: only `GET /health` for diagnostics (`node worker/dist/eonix-mem.mjs status`).
 - Rebuild after changing sources: `cd worker && npm install && npm run build && npm test`, then commit `dist/`.
 
-### Compression
+### Background agents
 
-After each turn (Stop + 3 s for late async tool events), the worker sends the turn — request,
-tool calls with their results, final answer — to **Claude Haiku 5.5** in one call, in the background.
-It returns typed observations plus a turn summary:
+Both agents run **Claude Haiku 5.5** through the Claude Agent SDK, driving the developer's **installed
+`claude`** (same login, no API key; the SDK's own ~330 MB native binary is not shipped).
 
-- `Decision`, `BusinessRule`, `Bug`, `Pitfall`, `Documentation` → marked to share with the team (step 5).
-- `Change`, `Discovery` → stay on the machine.
-- Unknown or malformed types fall back to `Discovery`: a model slip can never publish anything.
-
-It runs through the Claude Agent SDK driving the developer's **installed `claude`** (same login,
-no API key): the SDK's own native binary is ~330 MB per platform and is not shipped. The child
-session is isolated (`settingSources: []`, no tools, no MCP, not persisted) and our hooks ignore it
-(`EONIX_MEM_INTERNAL=1`), so it never records itself. If `claude` is not on `PATH`, set `claudePath`
-in `~/.eonix-mem/settings.json`; without it, capture still works and turns wait uncompressed.
+- They reach the server through **this plugin's OAuth connector**: the agent session loads the plugin,
+  so it reuses the login Claude Code already holds. No token to provision or distribute.
+- Isolation: no local settings (`settingSources: []`), **all hooks disabled** (`disableAllHooks`), no
+  built-in tools, permission mode `dontAsk` with only the listed MCP tools allowed
+  (distill: `list_cibles`, `remember`; consolidation: `pending_consolidations`, `list_cibles`,
+  `remember`, `mark_consolidated`). An agent session never records itself.
+- The distill agent follows the team's existing auto-distillation rules verbatim (default: remember
+  nothing; Bug / Decision / BusinessRule / Pitfall / Documentation; reuse targets; ≤ 3 sentences).
+  It also writes a local turn summary and local `Change` / `Discovery` notes, which never leave the machine.
+- If `claude` is not on `PATH`, set `claudePath` in `~/.eonix-mem/settings.json`; without it, local
+  capture still works and turns wait.
 
 ### SessionStart context and recall
 
-At session start the worker injects, for the current project and within a token budget
-(`contextMaxTokens`, default 2200; hard cap 9500 characters, under Claude Code's 10,000 limit):
+At session start the worker injects the background notice (so the session does not distill or
+consolidate itself), then, for the current project and within a token budget (`contextMaxTokens`;
+hard cap 9500 characters, under Claude Code's 10,000 limit):
 
 1. the last session summaries (request → what was done, what remains);
-2. the most recent observations in full;
+2. the most recent notes in full (team notes the agent wrote, local Change/Discovery);
 3. an index of older ones, each with its token cost.
 
-Nothing is injected for a project with no memory yet. Claude opens more on demand through Bash:
+Claude opens more on demand through Bash:
 
 - `node worker/dist/eonix-mem.mjs search "<words>" [--all]` — full-text search (FTS5), index lines.
-- `node worker/dist/eonix-mem.mjs show <id> [<id>...]` — full observations.
-
-Next step: push of shareable observations to the server (step 5). `hook_distill_reminder` stays
-wired until step 5 replaces it.
-
-Single-plugin marketplace, so the plugin's own files live at the repo root instead of under a
-`plugins/<name>/` subdirectory (`marketplace.json`'s `source` is `"."`).
-
-The backend (Marketplace.Web + Marketplace.Mcp + Postgres) lives in the separate
-`skill-marketplace` repository.
+- `node worker/dist/eonix-mem.mjs show <id> [<id>...]` — full notes.
 
 ## Auth model
 
 - **MCP tools AND hooks** → the same OAuth 2.1 `authorization_code` + PKCE + refresh session (federated
   to ADFS). No token to copy, nothing to set with `setx`.
 - Server hooks are wired as `mcp_tool` hooks (`hook_knowledge_check`, `hook_notes_check`,
-  `hook_consolidation_check`, `hook_distill_reminder` on the `marketplace` server; `hook_capture` was
-  replaced by the local worker in v0.7.0) instead of raw HTTP calls with
+  `hook_consolidation_check`, `hook_capture` on the `marketplace` server) instead of raw HTTP calls with
   a static bearer token — they ride on whichever MCP session is already connected, so there's no separate
   credential to provision, rotate, or corrupt (the old static PAT model hit a real bug: `setx` silently
   truncates values over 1024 characters, and the PAT is a ~1400-char JWT).
-- The legacy `/api/hook/*` HTTP endpoints (static `EONIX_HOOK_TOKEN` PAT) still exist server-side during
-  the transition, but this plugin no longer calls them.
+- The legacy `/api/hook/*` HTTP endpoints (static `EONIX_HOOK_TOKEN` PAT) are not used: tokens issued before the
+  server's signing-key rotation are rejected (ID2090). The worker's agents use the OAuth connector instead.
 
 ## Known limitation: no SessionStart hook
 
@@ -139,16 +152,6 @@ every attempt fails with "mcp_tool hooks are not available for the 'SessionStart
   available to the hook.
 - A local copy of the ruleset in your own `~/.claude/CLAUDE.md` is no longer required for it to reach the
   model, but can still be kept as a redundant safety net.
-
-## Forcing the auto-distillation decision every turn
-
-`hook_consolidation_check`'s reminder is only a nudge in the model's context — nothing stops the model
-from silently skipping the decision. `hook_distill_reminder`, wired on `Stop` (fires at the end of
-*every* turn, not just session end), returns a `systemMessage` the model must respond to before the
-turn actually ends. This isn't a hard block: Claude Code's current hook contract only offers real
-exit-code-2 blocking to `command`-type hooks, and doesn't expose a `stop_hook_active`-style loop guard
-for `mcp_tool` hooks on `Stop` — `systemMessage` is the closest lever available without reintroducing
-the infinite-reloop risk a blocking `agent`/`prompt`-type `Stop` hook hit in this project before.
 
 ## Connection race on the first prompt(s) of a session
 

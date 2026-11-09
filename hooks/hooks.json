@@ -1,5 +1,5 @@
 {
-  "description": "eonix-mem worker: single door to the Eonix server (episodes, notes, norms), background distill + consolidation agents, SessionStart context",
+  "description": "eonix-mem local worker: local capture, background distill + consolidation agents, SessionStart context",
   "hooks": {
     "SessionStart": [
       {
@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "node --no-warnings \"${CLAUDE_PLUGIN_ROOT}/worker/dist/eonix-mem.mjs\" hook SessionStart",
-            "timeout": 25
+            "timeout": 15
           }
         ]
       }
@@ -18,7 +18,7 @@
           {
             "type": "command",
             "command": "node --no-warnings \"${CLAUDE_PLUGIN_ROOT}/worker/dist/eonix-mem.mjs\" hook UserPromptSubmit",
-            "timeout": 20
+            "timeout": 10
           }
         ]
       }

@@ -8,8 +8,8 @@ export interface Settings {
   port: number;
   /** Timeout of a hook -> worker HTTP call, in ms. A hook must never block Claude Code. */
   hookTimeoutMs: number;
-  /** Timeout of the UserPromptSubmit hook -> worker call, which waits for notes/knowledge, in ms. */
-  promptHookTimeoutMs: number;
+  /** Timeout of the SessionStart hook -> worker call, which builds the context, in ms. */
+  sessionStartTimeoutMs: number;
   /** How long a hook waits for a freshly spawned worker to answer /health, in ms. */
   startupWaitMs: number;
   /** Max wait for the hook payload on stdin, in ms. */
@@ -23,23 +23,12 @@ export interface Settings {
   /** Tools whose PostToolUse events carry no useful memory and are not stored locally. */
   skipTools: string[];
 
-  /** Eonix MCP server base URL; EONIX_MCP_URL (same variable as .mcp.json) wins when set. */
-  serverUrl: string;
-  /** Bearer token for the server; EONIX_HOOK_TOKEN wins when set. Same client_credentials token as the legacy HTTP hooks. */
-  serverToken: string;
-  /** Timeout of one worker -> server HTTP call, in ms. */
-  serverTimeoutMs: number;
-  /** Tools whose PostToolUse events are relayed to the server as episodes — the matcher hook_capture had. */
-  captureTools: string[];
-  /** How often the outbox of server episodes is flushed, in ms. */
-  outboxIntervalMs: number;
-  /** An outbox entry that failed this many times is dropped. */
-  outboxMaxAttempts: number;
-
-  /** Model of every background agent (distill, consolidation, note triage). */
+  /** Model of every background agent (distill, consolidation). */
   agentModel: string;
   /** Path to the `claude` executable driven by the Agent SDK; empty = look it up on PATH. */
   claudePath: string;
+  /** Root of this plugin (holds .mcp.json); empty = CLAUDE_PLUGIN_ROOT or derived from the bundle path. */
+  pluginRoot: string;
   /** How often the worker looks for finished turns to distill, in ms. */
   distillIntervalMs: number;
   /** A turn with no Stop event is distilled anyway once its oldest event is this old, in ms. */
@@ -62,12 +51,7 @@ export interface Settings {
   /** Only projects with a local session in this window are consolidated, in days. */
   consolidationActiveProjectDays: number;
 
-  /** Above this many notes + norms for a prompt, the triage agent keeps only the relevant ones. */
-  triageThreshold: number;
-  /** Abort the triage agent after this long and inject the untriaged results, in ms. */
-  triageTimeoutMs: number;
-
-  /** Token budget of the local part of the SessionStart context. */
+  /** Token budget of the local memory part of the SessionStart context. */
   contextMaxTokens: number;
   /** Hard character cap of the whole SessionStart context, under Claude Code's 10,000-character limit. */
   contextMaxChars: number;
@@ -82,7 +66,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   port: 37800,
   hookTimeoutMs: 1500,
-  promptHookTimeoutMs: 15000,
+  sessionStartTimeoutMs: 5000,
   startupWaitMs: 4000,
   stdinTimeoutMs: 1000,
   spoolDrainIntervalMs: 30000,
@@ -93,15 +77,9 @@ export const DEFAULT_SETTINGS: Settings = {
     'ToolSearch', 'ListMcpResourcesTool', 'AskUserQuestion', 'ExitPlanMode', 'EnterPlanMode',
   ],
 
-  serverUrl: 'https://mcp.marketplace.eonix.be',
-  serverToken: '',
-  serverTimeoutMs: 8000,
-  captureTools: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'PowerShell'],
-  outboxIntervalMs: 3000,
-  outboxMaxAttempts: 50,
-
   agentModel: 'claude-haiku-5-5',
   claudePath: '',
+  pluginRoot: '',
   distillIntervalMs: 5000,
   orphanTurnAfterMs: 10 * 60 * 1000,
   turnSettleMs: 3000,
@@ -114,9 +92,6 @@ export const DEFAULT_SETTINGS: Settings = {
   consolidationTimeoutMs: 300000,
   consolidationActiveProjectDays: 14,
 
-  triageThreshold: 5,
-  triageTimeoutMs: 8000,
-
   contextMaxTokens: 1800,
   contextMaxChars: 9500,
   contextSummaries: 3,
@@ -126,7 +101,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
 /**
  * Set on the Claude Code process the worker spawns for its agents. Our own hooks see it and do
- * nothing, so an agent session never records itself (belt and braces with settingSources: []).
+ * nothing (belt and braces with disableAllHooks), so an agent session never records itself.
  */
 export const INTERNAL_ENV = 'EONIX_MEM_INTERNAL';
 
@@ -153,9 +128,6 @@ export function loadSettings(): Settings {
   const settings = { ...DEFAULT_SETTINGS, ...user };
   const envPort = Number(process.env.EONIX_MEM_PORT);
   if (Number.isInteger(envPort) && envPort > 0) settings.port = envPort;
-  if (process.env.EONIX_MCP_URL) settings.serverUrl = process.env.EONIX_MCP_URL;
-  if (process.env.EONIX_HOOK_TOKEN) settings.serverToken = process.env.EONIX_HOOK_TOKEN;
-  settings.serverUrl = settings.serverUrl.replace(/\/+$/, '');
   return settings;
 }
 

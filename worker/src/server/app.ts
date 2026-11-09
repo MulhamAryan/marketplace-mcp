@@ -2,14 +2,11 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import type { Db } from '../storage/db.js';
 import type { Settings } from '../settings.js';
 import { counts } from '../storage/stats.js';
-import { BadRequest, ingest, ingestPrompt, type IngestRoute, type PromptBody } from './ingest.js';
+import { BadRequest, ingest, type IngestRoute } from './ingest.js';
 import { log } from '../log.js';
 import { observationsByIds, searchObservations } from '../storage/observations.js';
 import { renderIndexLine, renderObservation } from '../context/render.js';
-import type { AgentProvider } from '../compression/provider.js';
-import { promptContext } from './prompt-context.js';
 import { sessionContext } from './session-context.js';
-import { serverConfigured } from './remote.js';
 
 export const WORKER_VERSION = '0.2.0';
 
@@ -17,17 +14,11 @@ export interface AppDeps {
   db: Db;
   settings: Settings;
   startedAt: number;
-  /** Background agent runner; null when no `claude` executable was found (agents off). */
-  provider: AgentProvider | null;
-  /** Asks the outbox sender to flush now (a new episode was queued). */
-  kickOutbox: () => void;
+  /** Background agents status, shown by /health; null when they are off. */
+  agents: string | null;
   /** Called by POST /api/shutdown; the server owner closes the listener and exits. */
   shutdown: () => void;
 }
-
-const asyncRoute =
-  (fn: (req: Request, res: Response) => Promise<void>) => (req: Request, res: Response, next: NextFunction) =>
-    fn(req, res).catch(next);
 
 /**
  * Worker HTTP API, loopback only. No UI here by design: the visual lives on marketplace.eonix.be.
@@ -45,38 +36,23 @@ export function createApp(deps: AppDeps) {
       pid: process.pid,
       port: settings.port,
       uptimeSec: Math.round((Date.now() - deps.startedAt) / 1000),
-      server: serverConfigured(settings) ? settings.serverUrl : 'not configured (EONIX_HOOK_TOKEN missing)',
-      agents: deps.provider ? settings.agentModel : 'off (no claude executable)',
+      agents: deps.agents ?? 'off (no claude executable or plugin root)',
       counts: counts(db),
     });
   });
 
   const ingestRoute = (route: IngestRoute) => (req: Request, res: Response) => {
     res.json(ingest(db, settings, route, req.body ?? {}));
-    deps.kickOutbox();
   };
+  app.post('/api/prompt', ingestRoute('prompt'));
   app.post('/api/observe', ingestRoute('observe'));
   app.post('/api/summary', ingestRoute('summary'));
 
-  // UserPromptSubmit: record the prompt, then answer with the team notes/norms to inject.
-  app.post(
-    '/api/prompt',
-    asyncRoute(async (req, res) => {
-      const body = (req.body ?? {}) as PromptBody;
-      const { promptNumber } = ingestPrompt(db, body);
-      deps.kickOutbox();
-      const raw = (body.raw ?? {}) as Record<string, unknown>;
-      res.json({ promptNumber, context: await promptContext(settings, deps.provider, raw) });
-    }),
-  );
-
-  // SessionStart: team rules + background notice + local memory of the project.
-  app.post(
-    '/api/session-start',
-    asyncRoute(async (req, res) => {
-      res.json({ context: await sessionContext(db, settings, (req.body ?? {}) as Record<string, unknown>) });
-    }),
-  );
+  // SessionStart: background notice + local memory of the project.
+  app.post('/api/session-start', (req, res) => {
+    const cwd = typeof req.body?.cwd === 'string' ? req.body.cwd : undefined;
+    res.json({ context: sessionContext(db, settings, cwd, deps.agents !== null) });
+  });
 
   // Layer 2 of progressive recall: full-text search, returns index lines (cheap).
   app.get('/api/search', (req, res) => {

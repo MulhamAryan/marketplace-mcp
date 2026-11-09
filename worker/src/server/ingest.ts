@@ -3,20 +3,17 @@ import { addRawEvent } from '../storage/events.js';
 import { addPrompt, currentPromptNumber } from '../storage/prompts.js';
 import { markSessionEnded, upsertSession } from '../storage/sessions.js';
 import { addSummaryRequest } from '../storage/summaries.js';
-import { enqueueOutbox } from '../storage/outbox.js';
 import { projectFromCwd } from '../project.js';
 import type { Settings } from '../settings.js';
 
 /**
- * Worker API bodies. Each carries the raw Claude Code hook payload (`raw`), relayed unchanged to the
- * server's /api/hook/capture — the episodes the server receives are exactly those hook_capture sent.
+ * Worker API bodies (local capture only: episodes still reach the server through hook_capture).
  * The spool replays these same bodies, so routes and spool drain share one code path.
  */
 export interface PromptBody {
   sessionId: string;
   cwd?: string;
   prompt: string;
-  raw?: unknown;
 }
 
 export interface ObserveBody {
@@ -26,14 +23,12 @@ export interface ObserveBody {
   toolName?: string;
   toolInput?: unknown;
   toolResponse?: unknown;
-  raw?: unknown;
 }
 
 export interface SummaryBody {
   sessionId: string;
   cwd?: string;
   lastAssistantMessage?: string;
-  raw?: unknown;
 }
 
 export type IngestRoute = 'prompt' | 'observe' | 'summary';
@@ -55,18 +50,12 @@ export function ingestPrompt(db: Db, body: PromptBody): { promptNumber: number }
   const sessionId = requireSession(body);
   if (typeof body.prompt !== 'string') throw new BadRequest('prompt is required');
   upsertSession(db, sessionId, projectFromCwd(body.cwd), body.cwd);
-  if (body.raw) enqueueOutbox(db, 'capture', body.raw);
   return { promptNumber: addPrompt(db, sessionId, body.prompt) };
 }
 
 export function ingestObservation(db: Db, settings: Settings, body: ObserveBody): { stored: boolean; id?: number } {
   const sessionId = requireSession(body);
   if (!body.event) throw new BadRequest('event is required');
-
-  // Same events as the former hook_capture matcher, relayed raw; the server keeps its own filtering.
-  if (body.raw && body.event === 'PostToolUse' && body.toolName && settings.captureTools.includes(body.toolName)) {
-    enqueueOutbox(db, 'capture', body.raw);
-  }
   if (body.toolName && settings.skipTools.includes(body.toolName)) return { stored: false };
 
   const project = projectFromCwd(body.cwd);
@@ -87,7 +76,6 @@ export function ingestSummary(db: Db, body: SummaryBody): { id: number } {
   const sessionId = requireSession(body);
   const project = projectFromCwd(body.cwd);
   upsertSession(db, sessionId, project, body.cwd);
-  if (body.raw) enqueueOutbox(db, 'capture', body.raw);
   const id = addSummaryRequest(db, sessionId, project, currentPromptNumber(db, sessionId), body.lastAssistantMessage ?? null);
   markSessionEnded(db, sessionId);
   return { id };

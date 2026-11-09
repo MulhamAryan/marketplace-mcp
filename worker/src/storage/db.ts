@@ -108,17 +108,8 @@ const MIGRATIONS: string[] = [
   CREATE INDEX ix_summaries_status ON summaries(status, id);
   CREATE INDEX ix_raw_events_turn ON raw_events(session_id, prompt_number, status);
   `,
-  // 3: the worker is the only door to the server. Episodes wait in an outbox until the server
-  // acknowledges them; observations remember which team note (target) they were pushed as.
+  // 3: observations remember which team note (target) the distill agent wrote through remember.
   `
-  CREATE TABLE server_outbox (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    endpoint    TEXT NOT NULL,             -- capture
-    payload     TEXT NOT NULL,             -- raw Claude Code hook payload, relayed as-is
-    created_at  TEXT NOT NULL,
-    attempts    INTEGER NOT NULL DEFAULT 0,
-    last_error  TEXT
-  );
   ALTER TABLE observations ADD COLUMN target TEXT;
   UPDATE observations SET share_status = 'local' WHERE share_status = 'pending';
   `,

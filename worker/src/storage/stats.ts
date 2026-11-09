@@ -12,6 +12,5 @@ export function counts(db: Db): Record<string, number> {
     teamNotesWritten: one(`SELECT COUNT(*) AS n FROM observations WHERE share_status = 'pushed'`),
     summaries: one('SELECT COUNT(*) AS n FROM summaries'),
     summariesPending: one(`SELECT COUNT(*) AS n FROM summaries WHERE status = 'pending'`),
-    episodesWaitingForServer: one('SELECT COUNT(*) AS n FROM server_outbox'),
   };
 }

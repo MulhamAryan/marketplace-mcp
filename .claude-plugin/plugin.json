@@ -1,8 +1,94 @@
 {
   "name": "eonix-mcp",
-  "description": "Eonix MCP memory + official knowledge for Claude Code. Registers the marketplace MCP as an OAuth connector for interactive tools, and runs the local eonix-mem worker: the single door to the Eonix server for hooks (episodes, team notes, official norms) with background AI agents for note distillation and episode consolidation. Hooks in hooks/hooks.json.",
+  "description": "Eonix MCP memory + official knowledge for Claude Code. Registers the marketplace MCP as an OAuth connector and wires the server hooks (notes, official knowledge, episodic capture). The local eonix-mem worker (hooks/hooks.json) adds background AI agents for note distillation and episode consolidation, plus SessionStart context.",
   "version": "0.8.0",
   "author": {
     "name": "Eonix"
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_knowledge_check",
+            "timeout": 6,
+            "input": {
+              "prompt": "${prompt}"
+            }
+          },
+          {
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_notes_check",
+            "timeout": 6,
+            "input": {
+              "prompt": "${prompt}",
+              "cwd": "${cwd}"
+            }
+          },
+          {
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_consolidation_check",
+            "timeout": 6,
+            "input": {
+              "cwd": "${cwd}"
+            }
+          },
+          {
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_capture",
+            "timeout": 6,
+            "input": {
+              "hookEventName": "UserPromptSubmit",
+              "sessionId": "${session_id}",
+              "cwd": "${cwd}",
+              "prompt": "${prompt}"
+            }
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_capture",
+            "timeout": 6,
+            "input": {
+              "hookEventName": "PostToolUse",
+              "sessionId": "${session_id}",
+              "cwd": "${cwd}",
+              "toolName": "${tool_name}",
+              "toolInputJson": "${tool_input}",
+              "toolResponseJson": "${tool_output}"
+            }
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "plugin:eonix-mcp:marketplace",
+            "tool": "hook_capture",
+            "timeout": 6,
+            "input": {
+              "hookEventName": "Stop",
+              "sessionId": "${session_id}",
+              "cwd": "${cwd}"
+            }
+          }
+        ]
+      }
+    ]
   }
 }

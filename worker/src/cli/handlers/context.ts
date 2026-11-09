@@ -8,7 +8,7 @@ import { log } from '../../log.js';
 export async function handleContext(settings: Settings, payload: HookPayload): Promise<string> {
   if (!(await ensureWorker(settings))) return '';
   try {
-    const { context } = await workerPost<{ context: string }>(settings, 'session-start', payload, settings.promptHookTimeoutMs);
+    const { context } = await workerPost<{ context: string }>(settings, 'session-start', payload, settings.sessionStartTimeoutMs);
     return context;
   } catch (err) {
     log('hook', 'session-start context failed', err);

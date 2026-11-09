@@ -1,11 +1,15 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { INTERNAL_ENV, type Settings } from '../settings.js';
-import { mcpServerConfig, serverConfigured } from '../server/remote.js';
 
-/** Name under which the Eonix MCP server is mounted in agent sessions: tools are mcp__eonix__<tool>. */
-export const EONIX_MCP = 'eonix';
+/**
+ * Prefix of the Eonix MCP tools in an agent session. The agent loads this plugin, so it reaches the
+ * marketplace server exactly like the developer's session does: through the plugin's OAuth connector
+ * (plugin:eonix-mcp:marketplace), reusing the login Claude Code already holds. No token to distribute.
+ */
+export const EONIX_TOOL_PREFIX = 'mcp__plugin_eonix-mcp_marketplace__';
 
 export interface AgentRequest {
   systemPrompt: string;
@@ -53,6 +57,20 @@ export function resolveClaudePath(settings: Settings): string | null {
   }
 }
 
+/**
+ * Root of this plugin (the folder holding .claude-plugin/ and .mcp.json): settings.pluginRoot, else
+ * CLAUDE_PLUGIN_ROOT inherited from the hook that spawned the worker, else derived from the bundle
+ * path (<root>/worker/dist/eonix-mem.mjs).
+ */
+export function resolvePluginRoot(settings: Settings): string | null {
+  const candidates = [
+    settings.pluginRoot,
+    process.env.CLAUDE_PLUGIN_ROOT,
+    process.argv[1] ? path.resolve(path.dirname(process.argv[1]), '..', '..') : '',
+  ];
+  return candidates.find((c) => c && fs.existsSync(path.join(c, '.mcp.json'))) ?? null;
+}
+
 const textOf = (content: unknown): string =>
   typeof content === 'string'
     ? content
@@ -61,21 +79,21 @@ const textOf = (content: unknown): string =>
       : '';
 
 /**
- * Claude Agent SDK provider: runs the installed Claude Code headless with the developer's own login,
- * isolated from every local setting so none of our plugin hooks fire in the child session. The only
- * tools it can reach are the listed Eonix MCP tools, on the same /mcp endpoint with the same token
- * as the rest of the worker; anything else is refused (permission mode dontAsk).
+ * Claude Agent SDK provider: runs the installed Claude Code headless with the developer's own login.
+ * Isolated from every local setting; loads only this plugin, for its OAuth MCP connector, with ALL
+ * hooks disabled — the plugin's own hooks (hook_capture, notes check, eonix-mem) must never run in an
+ * agent session, or it would record itself. The only tools it can call are the listed Eonix MCP
+ * tools; anything else is refused (permission mode dontAsk).
  */
 export class AgentSdkProvider implements AgentProvider {
   constructor(
     private readonly settings: Settings,
     private readonly claudePath: string,
+    private readonly pluginRoot: string | null,
   ) {}
 
   async run(req: AgentRequest): Promise<AgentResult> {
-    if (req.mcpTools.length > 0 && !serverConfigured(this.settings)) {
-      throw new Error('agent needs the Eonix server but no token is configured');
-    }
+    if (req.mcpTools.length > 0 && !this.pluginRoot) throw new Error('agent needs the Eonix plugin root, not found');
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(), req.timeoutMs);
     const pending = new Map<string, { tool: string; input: Record<string, unknown> }>();
@@ -89,9 +107,9 @@ export class AgentSdkProvider implements AgentProvider {
           tools: [],
           maxTurns: req.maxTurns,
           settingSources: [],
-          strictMcpConfig: true,
-          mcpServers: req.mcpTools.length > 0 ? { [EONIX_MCP]: mcpServerConfig(this.settings) } : {},
-          allowedTools: req.mcpTools.map((t) => `mcp__${EONIX_MCP}__${t}`),
+          settings: { disableAllHooks: true },
+          plugins: req.mcpTools.length > 0 && this.pluginRoot ? [{ type: 'local', path: this.pluginRoot }] : [],
+          allowedTools: req.mcpTools.map((t) => `${EONIX_TOOL_PREFIX}${t}`),
           permissionMode: 'dontAsk',
           persistSession: false,
           pathToClaudeCodeExecutable: this.claudePath,
@@ -102,9 +120,9 @@ export class AgentSdkProvider implements AgentProvider {
       for await (const message of q) {
         if (message.type === 'assistant') {
           for (const block of message.message.content) {
-            if (block.type === 'tool_use' && block.name.startsWith(`mcp__${EONIX_MCP}__`)) {
+            if (block.type === 'tool_use' && block.name.startsWith(EONIX_TOOL_PREFIX)) {
               pending.set(block.id, {
-                tool: block.name.slice(`mcp__${EONIX_MCP}__`.length),
+                tool: block.name.slice(EONIX_TOOL_PREFIX.length),
                 input: (block.input ?? {}) as Record<string, unknown>,
               });
             }

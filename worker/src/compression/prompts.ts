@@ -74,10 +74,6 @@ Procedure for project "${project}":
 3. Answer with one line: how many notes you wrote.`;
 }
 
-export const TRIAGE_SYSTEM_PROMPT = `You select context for a coding assistant. You receive a developer's request and a numbered
-list of candidate team notes and official norms. Keep only the items that genuinely help with THIS
-request. Answer with the kept numbers only, comma-separated (e.g. "2,5"), or "none". Nothing else.`;
-
 export interface TurnEvent {
   event: string;
   toolName: string | null;
