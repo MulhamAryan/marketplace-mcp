@@ -52,9 +52,30 @@ Switch back to prod mode — remove the override and restart Claude Code:
 
 ```
 .claude-plugin/marketplace.json   marketplace manifest (name: eonix)
-.claude-plugin/plugin.json        hooks (UserPromptSubmit / PostToolUse / Stop)
+.claude-plugin/plugin.json        mcp_tool hooks (UserPromptSubmit: knowledge, notes, consolidation reminder)
+hooks/hooks.json                  command hooks of the local eonix-mem worker (all events)
 .mcp.json                         the `marketplace` MCP server (HTTP + OAuth, alwaysLoad: true)
+worker/                           eonix-mem worker sources (TypeScript); dist/eonix-mem.cjs is the committed bundle
 ```
+
+## Local worker (eonix-mem)
+
+Inspired by [claude-mem](https://github.com/thedotmack/claude-mem) (Apache-2.0, see `NOTICE`):
+same flow, our own code.
+
+- Requires **Node >= 22.5** on `PATH` (uses the built-in `node:sqlite`, so no `npm install` at runtime).
+- One CLI for every hook: `node worker/dist/eonix-mem.cjs hook <event>`. Hooks are thin: they POST
+  the event to the worker on `127.0.0.1:37800` and exit 0, always.
+- The worker starts on demand (first hook, detached) and stays up; one per machine (the port is the lock).
+- If the worker cannot be reached, the event goes to `~/.eonix-mem/spool/` and is replayed later.
+- Data: `~/.eonix-mem/eonix-mem.db` (SQLite + FTS5). Logs: `~/.eonix-mem/logs/`. Tuning:
+  `~/.eonix-mem/settings.json` (keys and defaults in `worker/src/settings.ts`).
+- No UI on the worker: only `GET /health` for diagnostics (`node worker/dist/eonix-mem.cjs status`).
+- Rebuild after changing sources: `cd worker && npm install && npm run build && npm test`, then commit `dist/`.
+
+Status: capture (prompts, tool events, Stop) is done. Compression (Haiku via the Agent SDK),
+SessionStart context with a token budget, and the push of shareable observations to the server
+are the next steps.
 
 Single-plugin marketplace, so the plugin's own files live at the repo root instead of under a
 `plugins/<name>/` subdirectory (`marketplace.json`'s `source` is `"."`).
@@ -66,9 +87,9 @@ The backend (Marketplace.Web + Marketplace.Mcp + Postgres) lives in the separate
 
 - **MCP tools AND hooks** → the same OAuth 2.1 `authorization_code` + PKCE + refresh session (federated
   to ADFS). No token to copy, nothing to set with `setx`.
-- Hooks are wired as `mcp_tool` hooks (`hook_knowledge_check`, `hook_notes_check`,
-  `hook_consolidation_check`, `hook_capture`, `hook_distill_reminder` on the `marketplace` server)
-  instead of raw HTTP calls with
+- Server hooks are wired as `mcp_tool` hooks (`hook_knowledge_check`, `hook_notes_check`,
+  `hook_consolidation_check` on the `marketplace` server; `hook_capture` and `hook_distill_reminder`
+  were replaced by the local worker in v0.7.0) instead of raw HTTP calls with
   a static bearer token — they ride on whichever MCP session is already connected, so there's no separate
   credential to provision, rotate, or corrupt (the old static PAT model hit a real bug: `setx` silently
   truncates values over 1024 characters, and the PAT is a ~1400-char JWT).

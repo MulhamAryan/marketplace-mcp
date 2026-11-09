@@ -1,7 +1,7 @@
 {
   "name": "eonix-mcp",
-  "description": "Eonix MCP memory + official knowledge for Claude Code. Registers the marketplace MCP as an OAuth/ADFS connector and wires the auto-injection hooks (notes, official knowledge, episodic capture).",
-  "version": "0.6.0",
+  "description": "Eonix MCP memory + official knowledge for Claude Code. Registers the marketplace MCP as an OAuth/ADFS connector, wires the auto-injection hooks (notes, official knowledge) and runs the local eonix-mem worker (capture, compression, context injection; hooks in hooks/hooks.json).",
+  "version": "0.7.0",
   "author": {
     "name": "Eonix"
   },
@@ -36,63 +36,6 @@
             "input": {
               "cwd": "${cwd}"
             }
-          },
-          {
-            "type": "mcp_tool",
-            "server": "plugin:eonix-mcp:marketplace",
-            "tool": "hook_capture",
-            "timeout": 6,
-            "input": {
-              "hookEventName": "UserPromptSubmit",
-              "sessionId": "${session_id}",
-              "cwd": "${cwd}",
-              "prompt": "${prompt}"
-            }
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell",
-        "hooks": [
-          {
-            "type": "mcp_tool",
-            "server": "plugin:eonix-mcp:marketplace",
-            "tool": "hook_capture",
-            "timeout": 6,
-            "input": {
-              "hookEventName": "PostToolUse",
-              "sessionId": "${session_id}",
-              "cwd": "${cwd}",
-              "toolName": "${tool_name}",
-              "toolInputJson": "${tool_input}",
-              "toolResponseJson": "${tool_output}"
-            }
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "mcp_tool",
-            "server": "plugin:eonix-mcp:marketplace",
-            "tool": "hook_capture",
-            "timeout": 6,
-            "input": {
-              "hookEventName": "Stop",
-              "sessionId": "${session_id}",
-              "cwd": "${cwd}"
-            }
-          },
-          {
-            "type": "mcp_tool",
-            "server": "plugin:eonix-mcp:marketplace",
-            "tool": "hook_distill_reminder",
-            "timeout": 6,
-            "input": {}
           }
         ]
       }
