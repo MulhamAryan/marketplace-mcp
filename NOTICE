@@ -8,4 +8,4 @@ licensed under the Apache License, Version 2.0. The code in this repository is a
 rewrite and contains no source copied from claude-mem.
 
 This bundle (worker/dist/eonix-mem.cjs) includes third-party npm packages, notably Express
-(MIT License). Their licenses are available in their respective packages on npm.
+(MIT License) and the Claude Agent SDK (@anthropic-ai/claude-agent-sdk). Their licenses are available in their respective packages on npm.
