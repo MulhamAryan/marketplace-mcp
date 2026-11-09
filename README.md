@@ -83,7 +83,7 @@ The backend (Marketplace.Web + Marketplace.Mcp + Postgres) lives in the separate
 | Every prompt, edit, command, end of turn | episode sent to the server | `hook_capture` (unchanged) |
 | Every prompt, tool call, end of turn | full turn kept locally (tool results included) | worker |
 | End of each turn (Stop + 3 s) | team distill rules applied: `list_cibles` then `remember`, or nothing | worker, **distill agent** |
-| Every 30 min | pending episodes consolidated: `pending_consolidations` → `remember` → `mark_consolidated` | worker, **consolidation agent** |
+| ~30 s after a turn (backlog drained continuously) | pending episodes consolidated: `pending_consolidations` → `remember` → `mark_consolidated` | worker, **consolidation agent** |
 | Session start | background notice + local memory of the project | worker |
 
 Team notes, episodes and their types are exactly the same as before; only the actor of the distill
@@ -164,7 +164,7 @@ What the log lines mean:
 | `agents on (claude-haiku-5-5 via …, plugin …)` | worker started, background agents active |
 | `turn <session>#<n> distilled — team notes: none` | turn read, nothing durable (the normal case) |
 | `turn … distilled — team notes: Pitfall pitfall:…` | a team note was written or updated → visible on /Memory |
-| `consolidation <project>: N note(s), N cluster(s) marked` | episodes consolidated (every 30 min) |
+| `consolidation <project>: N note(s), N cluster(s) marked` | episodes consolidated (~30 s after a turn; repeated while a backlog remains) |
 | `agents off: claude=not found …` | `claude` not on `PATH` → set `claudePath` in settings.json |
 | `turn … distill failed — giving up` | 3 failed attempts; the turn is dropped (local capture kept) |
 
@@ -186,12 +186,13 @@ Settings (`%USERPROFILE%\.eonix-mem\settings.json`, every key optional; full lis
 | `claudePath` | (auto, `where claude`) | path to `claude.exe` if not on `PATH` |
 | `turnSettleMs` | `3000` | wait after a turn ends before distilling it |
 | `orphanTurnAfterMs` | `600000` | a turn without end (session closed) is distilled after this |
-| `consolidationIntervalMs` | `1800000` | consolidation period (30 min) |
-| `consolidationClustersPerRun` | `3` | episode clusters consolidated per project per run |
+| `consolidationDebounceMs` | `30000` | consolidation runs this long after a turn (quick turns share one run) |
+| `consolidationIntervalMs` | `600000` | fallback sweep of all active projects (10 min) |
+| `consolidationClustersPerRun` | `5` | clusters per run; a full run is followed by another until the backlog is empty |
 | `contextMaxTokens` | `1800` | budget of the local memory injected at session start |
 | `port` | `37800` | loopback port of the worker |
 
-Example: `{ "consolidationIntervalMs": 600000 }` to consolidate every 10 min.
+Example: `{ "consolidationDebounceMs": 10000 }` to consolidate 10 s after each turn.
 
 ## Auth model
 

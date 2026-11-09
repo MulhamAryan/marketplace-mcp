@@ -1,7 +1,7 @@
 {
   "name": "eonix-mcp",
   "description": "Eonix MCP memory + official knowledge for Claude Code. Registers the marketplace MCP as an OAuth connector and wires the server hooks (notes, official knowledge, episodic capture). AI Eonix Memory, its local worker (hooks/hooks.json), adds background AI agents for note distillation and episode consolidation, plus SessionStart context.",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "author": {
     "name": "Eonix"
   },

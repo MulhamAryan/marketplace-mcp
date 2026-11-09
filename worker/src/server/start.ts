@@ -25,8 +25,9 @@ export function runWorker(): Promise<void> {
   const claudePath = resolveClaudePath(settings);
   const pluginRoot = resolvePluginRoot(settings);
   const provider = claudePath && pluginRoot ? new AgentSdkProvider(settings, claudePath, pluginRoot) : null;
-  const distill = provider ? new DistillQueue(db, settings, provider) : null;
   const consolidation = provider ? new ConsolidationJob(db, settings, provider) : null;
+  // Each distilled turn triggers the consolidation of its project, ~consolidationDebounceMs later.
+  const distill = provider ? new DistillQueue(db, settings, provider, (project) => consolidation?.request(project)) : null;
 
   const drain = () => {
     const n = spoolDrain(

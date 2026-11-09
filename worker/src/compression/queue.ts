@@ -27,6 +27,8 @@ export class DistillQueue {
     private readonly db: Db,
     private readonly settings: Settings,
     private readonly provider: AgentProvider,
+    /** Called with the project of each distilled turn (triggers its consolidation). */
+    private readonly onTurnDistilled: (project: string) => void = () => {},
   ) {}
 
   start(): void {
@@ -79,6 +81,7 @@ export class DistillQueue {
           saveCompressedTurn(this.db, turn, parsed, notes);
           const written = notes.map((n) => `${n.type} ${n.target}`).join(', ') || 'none';
           log('worker', `turn ${key.sessionId}#${key.promptNumber} distilled — team notes: ${written}`);
+          this.onTurnDistilled(turn.project);
         } catch (err) {
           const gaveUp = recordTurnFailure(this.db, turn, this.settings.maxDistillAttempts);
           log('worker', `turn ${key.sessionId}#${key.promptNumber} distill failed${gaveUp ? ' — giving up' : ''}`, err);
