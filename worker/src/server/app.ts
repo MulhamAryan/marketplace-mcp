@@ -5,6 +5,8 @@ import { counts } from '../storage/stats.js';
 import { BadRequest, ingest, type IngestRoute } from './ingest.js';
 import { buildContext } from '../context/builder.js';
 import { log } from '../log.js';
+import { observationsByIds, searchObservations } from '../storage/observations.js';
+import { renderIndexLine, renderObservation } from '../context/render.js';
 
 export const WORKER_VERSION = '0.1.0';
 
@@ -46,6 +48,24 @@ export function createApp(deps: AppDeps) {
   app.get('/api/context', (req, res) => {
     const cwd = typeof req.query.cwd === 'string' ? req.query.cwd : undefined;
     res.json({ context: buildContext(db, settings, cwd) });
+  });
+
+  // Layer 2 of progressive recall: full-text search, returns index lines (cheap).
+  app.get('/api/search', (req, res) => {
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    const project = typeof req.query.project === 'string' && req.query.project ? req.query.project : undefined;
+    const rows = searchObservations(db, q, project, 20);
+    res.json({ text: rows.length ? rows.map(renderIndexLine).join('\n') : 'Aucune observation trouvée.' });
+  });
+
+  // Layer 3: full observations by id.
+  app.get('/api/observations', (req, res) => {
+    const ids = String(req.query.ids ?? '')
+      .split(',')
+      .map((s) => Number(s.replace(/^#/, '')))
+      .filter((n) => Number.isInteger(n) && n > 0);
+    const rows = observationsByIds(db, ids);
+    res.json({ text: rows.length ? rows.map(renderObservation).join('\n\n') : 'Aucune observation avec ces ids.' });
   });
 
   app.post('/api/shutdown', (_req, res) => {

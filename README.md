@@ -89,8 +89,22 @@ session is isolated (`settingSources: []`, no tools, no MCP, not persisted) and 
 (`EONIX_MEM_INTERNAL=1`), so it never records itself. If `claude` is not on `PATH`, set `claudePath`
 in `~/.eonix-mem/settings.json`; without it, capture still works and turns wait uncompressed.
 
-Next steps: SessionStart context with a token budget (step 4), push of shareable observations to
-the server (step 5). `hook_distill_reminder` stays wired until step 5 replaces it.
+### SessionStart context and recall
+
+At session start the worker injects, for the current project and within a token budget
+(`contextMaxTokens`, default 2200; hard cap 9500 characters, under Claude Code's 10,000 limit):
+
+1. the last session summaries (request → what was done, what remains);
+2. the most recent observations in full;
+3. an index of older ones, each with its token cost.
+
+Nothing is injected for a project with no memory yet. Claude opens more on demand through Bash:
+
+- `node worker/dist/eonix-mem.mjs search "<words>" [--all]` — full-text search (FTS5), index lines.
+- `node worker/dist/eonix-mem.mjs show <id> [<id>...]` — full observations.
+
+Next step: push of shareable observations to the server (step 5). `hook_distill_reminder` stays
+wired until step 5 replaces it.
 
 Single-plugin marketplace, so the plugin's own files live at the repo root instead of under a
 `plugins/<name>/` subdirectory (`marketplace.json`'s `source` is `"."`).

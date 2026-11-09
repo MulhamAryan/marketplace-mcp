@@ -38,6 +38,16 @@ export interface Settings {
   maxTurnInputChars: number;
   /** Observation types that leave the machine (pushed to the team server). All others stay local. */
   shareableTypes: string[];
+  /** Token budget of the context injected at SessionStart (Claude Code caps it at 10,000 characters). */
+  contextMaxTokens: number;
+  /** Hard character cap of the injected context, kept under Claude Code's 10,000-character limit. */
+  contextMaxChars: number;
+  /** Number of recent session summaries shown at SessionStart. */
+  contextSummaries: number;
+  /** Number of most recent observations shown in full (the rest only in the index). */
+  contextFullObservations: number;
+  /** Maximum number of observations considered for the SessionStart index. */
+  contextIndexObservations: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -61,6 +71,11 @@ export const DEFAULT_SETTINGS: Settings = {
   maxCompressionAttempts: 3,
   maxTurnInputChars: 60000,
   shareableTypes: ['Decision', 'BusinessRule', 'Pitfall', 'Documentation'],
+  contextMaxTokens: 2200,
+  contextMaxChars: 9500,
+  contextSummaries: 3,
+  contextFullObservations: 5,
+  contextIndexObservations: 50,
 };
 
 /**
